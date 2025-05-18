@@ -1,0 +1,4 @@
+python_dotenv
+datasets==3.6.0
+fsspec==2025.3.0
+scikit-learn==1.6.1
