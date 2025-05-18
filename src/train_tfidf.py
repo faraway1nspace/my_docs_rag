@@ -29,7 +29,7 @@ def train_tfidf(config: TrainingConfig = TrainingConfig()):
     tokenizer = SentencePieceTokenizer.load(config=config.sp)
 
     # test the tokenizer
-    print(tokenizer.tokenize())
+    print(tokenizer.tokenize(TEST_STRING))
 
     # instantiate TFIDF retriever for training
     tfidf = TFIDFRetriever(

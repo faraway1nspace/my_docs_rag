@@ -10,7 +10,7 @@ from typing import Literal, Tuple
 
 VOCAB_SIZE = 5000
 
-PATH_TFIDF = "../resources/tfidf"
+PATH_TFIDF = "resources/tfidf"
 
 if not os.path.isdir(PATH_TFIDF):
     os.makedirs(PATH_TFIDF, exist_ok=True)

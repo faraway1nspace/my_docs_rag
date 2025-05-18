@@ -77,7 +77,7 @@ class TFIDFRetriever:
 
     def vectorize(self, docs: List[str]):
         doc_tokenized = self.tokenize(docs)
-        doc_strings = [' '.join(tokens) for tokens in docs]
+        doc_strings = [' '.join(tokens) for tokens in doc_tokenized]
         return self.vectorizer.transform(doc_strings).toarray()
 
     def train(
