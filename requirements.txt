@@ -2,3 +2,5 @@ python_dotenv
 datasets==3.6.0
 fsspec==2025.3.0
 scikit-learn==1.6.1
+python-docx==1.1.2
+PyPDF2==3.0.1
