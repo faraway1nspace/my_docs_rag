@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from typing import List, Dict
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from src.config import TFIDFConfig, TrainingConfig
+from src.config import TFIDFConfig, TrainingConfig, SentencePieceConfig
 
 
 class SentencePieceTokenizer:
@@ -31,6 +31,12 @@ class SentencePieceTokenizer:
         text = re.sub("[^\w]+", " ", text)
         return text
 
+    @classmethod
+    def load(cls, config: SentencePieceConfig = SentencePieceConfig()) -> 'SentencePieceTokenizer':
+        return SentencePieceTokenizer(
+            model_path=config.model_prefix + ".model"
+        )
+
 
 class TFIDFRetriever:
 
@@ -40,6 +46,7 @@ class TFIDFRetriever:
             tokenizer: SentencePieceTokenizer | None = None,
             config:TFIDFConfig = TFIDFConfig()
     ):
+        # attach tfidf vectorizer (or re-initialize blank)
         self.vectorizer = (
             vectorizer 
             if (vectorizer is not None) 
@@ -54,12 +61,17 @@ class TFIDFRetriever:
                 sublinear_tf = config.sublinear_tf
             )
         )
-        self.tokenizer = tokenizer
+        # attach the tokenizer (or reload if None)
+        self.tokenizer = (
+            tokenizer 
+            if tokenizer is not None
+            else SentencePieceTokenizer.load()
+        )
         self.config = config
 
     def tokenize(self, texts: List[str]) -> List[List[str]]:
         return [
-            self.tokenizer.sp.encode_as_pieces(self._preprocess(text))
+            self.tokenizer.tokenize(text)
             for text in texts
         ] 
 
@@ -69,6 +81,7 @@ class TFIDFRetriever:
         return self.vectorizer.transform(doc_strings).toarray()
 
     def train(
+        self,
         docs:List[str],
         tokenizer: SentencePieceTokenizer | None = None,
     ) -> None:
@@ -80,15 +93,16 @@ class TFIDFRetriever:
 
         # tokenize the corpus
         docs_tokenized = self.tokenize(docs)
-        
+        docs_tokenized = [d for d in docs_tokenized if d] # remove empty
+
         # reconstitute the docs into astrings
-        doc_strings = [' '.join(tokens) for tokens in docs]
+        doc_strings = [' '.join(tokens) for tokens in docs_tokenized]
 
         # train the tfidf vectorizer
         self.vectorizer.fit(doc_strings)
 
 
-    def save(self, vectorizer_path: str|None):
+    def save(self, vectorizer_path: str|None=None):
         if vectorizer_path is None:
             vectorizer_path = self.config.model_path
         
@@ -98,17 +112,15 @@ class TFIDFRetriever:
     @classmethod
     def load(cls, config:TrainingConfig = TrainingConfig()) -> 'TFIDFRetriever':
         vectorizer_path = config.tfidf.model_path
-        sp_path = f"{config.sp.model_prefix}.model"
         assert os.path.isfile(vectorizer_path)
-        assert os.path.isfile(sp_path)
+
+        # reload the sentencepiece tokenizer
+        tokenizer = SentencePieceTokenizer.load(config.sp)
 
         # reload the tfidf vectorizer
         with open(vectorizer_path, 'rb') as f:
             vectorizer = pickle.load(f)
         
-        # reload the sentencepiece tokenizer
-        tokenizer = SentencePieceTokenizer(model_path=sp_path)
-
         return cls(
             vectorizer=vectorizer, 
             tokenizer=tokenizer,

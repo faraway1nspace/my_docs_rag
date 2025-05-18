@@ -9,14 +9,14 @@ from typing import List
 from src.config import TrainingConfig
 from src.retriever import SentencePieceTokenizer, TFIDFRetriever
 
-
+TEST_STRING = "The ideal candidate will have a background in business, tax, and legal contracts."
 
 def train_tfidf(config: TrainingConfig = TrainingConfig()):
 
     # save locally to reload through SP
     corpus = make_tfidf_training_set(config)
     
-    # Train SentencePiece tokenizer
+    # Train SentencePiece tokenizer (and save locally)
     spm.SentencePieceTrainer.train(
         input=config.sp.sp_train_file,
         model_prefix=config.sp.model_prefix,
@@ -26,10 +26,10 @@ def train_tfidf(config: TrainingConfig = TrainingConfig()):
     )
 
     # reload the sp model as a tokenizer
-    tokenizer = SentencePieceTokenizer(model_path=f"{config.sp.model_prefix}.model")
+    tokenizer = SentencePieceTokenizer.load(config=config.sp)
 
     # test the tokenizer
-    print(tokenizer.tokenize("The ideal candidate will have a background in business, tax, and legal contracts."))
+    print(tokenizer.tokenize())
 
     # instantiate TFIDF retriever for training
     tfidf = TFIDFRetriever(
@@ -43,7 +43,17 @@ def train_tfidf(config: TrainingConfig = TrainingConfig()):
     # save tfidf artfiact locally
     tfidf.save()
 
-    # try reloading
+    # try reloading and testing
+    tfidf2 = TFIDFRetriever.load(config)
+
+    # ensure reloading works
+    diff = tfidf.vectorize([TEST_STRING])-tfidf2.vectorize([TEST_STRING])
+    assert diff.sum() < 0.00000001
+
+    # demo the retrieval
+    print('Done training the TFIDF and tokenizer.')
+
+    
 
 
 def make_tfidf_training_set(config: TrainingConfig) -> List[str]:
