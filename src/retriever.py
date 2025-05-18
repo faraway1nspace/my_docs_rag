@@ -9,10 +9,10 @@ from typing import List, Dict
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 
-class SentencePieceTokenizer(BaseModel):
-    model_path: str
-
-    def __init__(self, model_path: str | None):
+class SentencePieceTokenizer:
+    
+    def __init__(self, model_path: str | None = None):
+        self.model_path = model_path
         if model_path is not None:
             self.model_path = model_path
             self.sp = spm.SentencePieceProcessor()
@@ -21,7 +21,7 @@ class SentencePieceTokenizer(BaseModel):
     def tokenize(self, text: str) -> List[str]:
         return self.sp.encode_as_pieces(self._preprocess(text))
 
-    @classmethod
+    @staticmethod
     def _preprocess(text: str) -> str:
         # lowercase
         text = text.lower()
@@ -30,9 +30,7 @@ class SentencePieceTokenizer(BaseModel):
         return text
 
 
-class TFIDFRetriever(BaseModel):
-    vectorizer: TfidfVectorizer
-    tokenizer: SentencePieceTokenizer
+class TFIDFRetriever:
 
     def __init__(
             self, vectorizer: TfidfVectorizer, tokenizer: SentencePieceTokenizer
