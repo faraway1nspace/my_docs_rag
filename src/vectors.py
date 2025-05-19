@@ -1,113 +1,155 @@
 import os
 import pickle
+import hashlib
+import glob
+from typing import Dict, Tuple
+
+import docx
+import PyPDF2
 
 import numpy as np
-import pandas as pd
-from typing import List, Literal
 
+from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
-
-class DocVector:
-    """A vector representation of a document."""
-    filename:str
-    vector:np.ndarray
-    path:str
-    text:str | None = None
-
-    def __init__(
-            self, 
-            filename: str, 
-            vector: np.ndarray,
-            path: str,
-            text: str | None = None
-    ):
-        self.filename = filename
-        self.vector = vector
-        self.path = path
-        self.text = text
-
-    def to_dict(self):
-        return {
-            "filename": self.filename,
-            "vector": self.vector.tolist(),
-            "path": self.path,
-            "text": self.text
-        }
-    
-    @classmethod
-    def load(cls, a:dict)->"DocVector":
-        return DocVector(
-            filename=a["filename"],
-            vector=np.array(a["vector"]),
-            path=a["path"],
-            text=a["text"]
-        )
+from src.retriever import TFIDFRetriever
+from src.config import TrainingConfig, RunConfig
+from src.vectors import DocVector, VectorDataset
 
 
-class VectorDataset:
-    """A collection of document vectors to facilitate query retrieval."""
-    docs: List[DocVector] = []
+class BaseCorpusVectorizer:
+    def __init__(self, database_path: str):      
+        self.database_path = database_path
+        # load the vector dataset
+        self.database: VectorDataset = self.load_database(database_path)
 
-    def __init__(
-            self, docs: List[DocVector] = []
-    ):
-        self.docs = docs
-    
-    def __len__(self):
-        return len(self.docs)
-    
-    def __getitem__(self, idx):
-        return self.docs[idx]
-
-    def append(self, doc: DocVector):
-        """Add a doc vector to the vector dataset"""
-        self.docs.append(doc)
-
-    def array(self) -> np.ndarray:
-        """Combine all document vectors into a single matrix."""
-        return np.array([doc.vector for doc in self.docs])
-
-    def score(
-            self, 
-            query_vector: np.ndarray,
-            return_type: Literal['dict','list','pandas'] = 'dict'
-        ) -> Dict[str, float]:
-        # Combine all document vectors into a matrix
-        m = self.array()
-
-        # compute the cosine similarity between query vector and m
-        similarities = cosine_similarity(query_vector, m).flatten()
-        scores = {
-            doc.filename: float(score) for doc, score in zip(self.docs, similarities)
-        }
-        if return_type=='list':
-            return list(scores.values())
-        elif return_type=='pandas':
-            return pd.Series(scores)
-        return scores
-
-    def save(self, path:str):
-        """Save the vector database to a pickle file."""
-        with open(path, 'wb') as pcon:
-            for doc in self.docs:
-                pickle.dump(doc.to_dict(), pcon)
-
-    @property
-    def filenames(self) -> List[str]:
-        """Return a list of filenames in the vector database."""
-        return [doc.filename for doc in self.docs]
-    
-    @classmethod
-    def load(cls, path:str) -> 'VectorDataset':
-        """Load the vector database from a pickle file."""
-        vector_database = VectorDataset()
-        if os.path.isfile(path):
-            with open(path, 'rb') as f:
-                while True:
-                    try:
-                        vector_database.append(DocVector.load(pickle.load(f)))
-                    except EOFError:
-                        break
+    def load_database(self, path: str | None) -> VectorDataset:
+        """Load a vectorized corpus of documents."""
+        if path is None:
+            path = self.database_path
+        vector_database = VectorDataset.load(path)
         return vector_database
+
+    def save_database(self, path: str | None = None):
+        """Save the vector database to a pickle file."""
+        if path is None:
+            path = self.database_path        
+        self.database.save(path)
+
+    def hash_file(self, filepath: str) -> str:
+        """Generate a hash for a file based on its content."""
+        hasher = hashlib.md5()
+        with open(filepath, 'rb') as f:
+            hasher.update(f.read())
+        return hasher.hexdigest()
+
+    def extract_text(self, filepath: str) -> str:
+        """Extract text from a file, supporting docx, pdf, and txt formats."""
+        if filepath.endswith(".docx"):
+            return self.extract_text_from_docx(filepath)
+        elif filepath.endswith(".pdf"):
+            return self.extract_text_from_pdf(filepath)
+        elif filepath.endswith(".txt"):
+            return self.extract_text_from_txt(filepath)
+        else:
+            raise ValueError(f"Unsupported file type: {filepath}")
+
+    def extract_text_from_docx(self, filepath: str) -> str:
+        """Extract text from a DOCX file."""
+        doc = docx.Document(filepath)
+        return '\n'.join([para.text for para in doc.paragraphs])
+
+    def extract_text_from_pdf(self, filepath: str) -> str:
+        """Extract text from a PDF file."""
+        text = ""
+        with open(filepath, 'rb') as file:
+            reader = PyPDF2.PdfReader(file)
+            for page in reader.pages:
+                text += page.extract_text()
+        return text
+
+    def extract_text_from_txt(self, filepath: str) -> str:
+        """Extract text from a TXT file."""
+        with open(filepath, 'r', encoding='utf-8') as file:
+            return file.read()
+
+    def vectorize_corpus(self):
+        """Abstract method for vectorizing the corpus, to be implemented by child classes."""
+        raise NotImplementedError("This method should be implemented by subclasses.")
+
+
+
+class TFIDFCorpusVectorizer(BaseCorpusVectorizer):
+    """Wrapper to vectorize a local directory of files by TFIDF."""
+
+    def __init__(self, retriever: TFIDFRetriever, path_database:str = PATH_DATABASE_TFIDF):
+        super().__init__(database_path=path_database)
+        self.retriever = retriever
+
+    def vectorize_corpus(self, docs_path: str = DOCS_PATH):
+        """Vectorize the documents using TFIDF and update the database."""
+
+        files_to_vectorize = glob.glob(os.path.join(docs_path, "*"))
+        new_files:List[str] = [] # new files
+        files_in_corpus = self.database.filenames # files already in corpus
+        for filepath in files_to_vectorize:
+            filename = filepath.split('/')[-1]
+            # only vectorize new files
+            if filename not in files_in_corpus:
+                print(f"Vectorizing new file: {filepath}")
+                text = self.extract_text(filepath)
+                vector = self.retriever.vectorize([text])[0]
+                self.database.append(
+                    DocVector(
+                        filename=filename,
+                        vector=vector,
+                        path=filepath,
+                        text=text
+                    )
+                )
+                new_files.append(filepath)
+
+        if new_files:
+            self.save_database()
+            print(f"Updated TFIDF database with {len(new_files)} new files.")
+        else:
+            print("No new files to vectorize.")        
+
+
+class SBERTCorpusVectorizer(BaseCorpusVectorizer):
+    def __init__(self, model_name: str, path_database:str = PATH_DATABASE_SBERT):
+        super().__init__(database_path=path_database)
+        self.model = SentenceTransformer(model_name)
+
+    def vectorize_corpus(self):
+        """Vectorize the documents using SBERT and update the database."""
+        files = glob.glob(os.path.join(DOCS_PATH, "*"))
+        new_files = []
+
+        for filepath in files:
+            file_hash = self.hash_file(filepath)
+            if file_hash not in self.database:
+                print(f"Vectorizing new file: {filepath}")
+                text = self.extract_text(filepath)
+                vector = self.model.encode(text, convert_to_numpy=True).tolist()
+                self.database[file_hash] = (filepath, vector)
+                new_files.append(filepath)
+
+        if new_files:
+            self.save_database()
+            print(f"Updated SBERT database with {len(new_files)} new files.")
+        else:
+            print("No new files to vectorize.")
+
+# Usage
+if __name__ == "__main__":
+    config = TrainingConfig()
     
+    # TFIDF Vectorization
+    tfidf_retriever = TFIDFRetriever.load(config)
+    tfidf_vectorizer = TFIDFCorpusVectorizer(tfidf_retriever)
+    tfidf_vectorizer.vectorize_corpus()
+
+    # SBERT Vectorization
+    sbert_vectorizer = SBERTCorpusVectorizer(config.sbert_model_string)
+    sbert_vectorizer.vectorize_corpus()

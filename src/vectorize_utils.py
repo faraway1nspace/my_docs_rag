@@ -13,20 +13,12 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from src.retriever import TFIDFRetriever
-from src.config import TrainingConfig
+from src.config import TrainingConfig, RunConfig
 from src.vectors import DocVector, VectorDataset
 
-# Base path for documents
-DOCS_PATH = "./docs"
-
-PATH_DATABASES = "./database"
-PATH_DATABASE_SBERT = f"{PATH_DATABASES}/sbert_vectors.pkl"
-PATH_DATABASE_TFIDF = f"{PATH_DATABASES}/tfidf_vectors.pkl"
 
 class BaseCorpusVectorizer:
-    def __init__(self, database_path: str):
-        if not os.path.isdir(PATH_DATABASES):
-            os.makedirs(PATH_DATABASES,exist_ok=True)        
+    def __init__(self, database_path: str):      
         self.database_path = database_path
         # load the vector dataset
         self.database: VectorDataset = self.load_database(database_path)
@@ -109,7 +101,7 @@ class TFIDFCorpusVectorizer(BaseCorpusVectorizer):
                 vector = self.retriever.vectorize([text])[0]
                 self.database.append(
                     DocVector(
-                        filename=filepath.split('/')[-1],
+                        filename=filename,
                         vector=vector,
                         path=filepath,
                         text=text

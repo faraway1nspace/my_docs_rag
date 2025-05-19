@@ -11,9 +11,16 @@ from typing import Literal, Tuple
 VOCAB_SIZE = 5000
 
 PATH_TFIDF = "resources/tfidf"
+DOCS_PATH = "./docs"
+PATH_DATABASES = "./database"
+PATH_DATABASE_SBERT = f"{PATH_DATABASES}/sbert_vectors.pkl"
+PATH_DATABASE_TFIDF = f"{PATH_DATABASES}/tfidf_vectors.pkl"
 
-if not os.path.isdir(PATH_TFIDF):
-    os.makedirs(PATH_TFIDF, exist_ok=True)
+
+for _dir in [PATH_TFIDF, DOCS_PATH, PATH_DATABASES]
+    if not os.path.isdir(_dir):
+        os.makedirs(_dir, exist_ok=True)
+
 
 class SentencePieceConfig(BaseModel):
     model_prefix: str = f"{PATH_TFIDF}/sp"
@@ -34,6 +41,12 @@ class TFIDFConfig(BaseModel):
     sublinear_tf: bool = False 
 
 
+class BertConfig(BaseModel):
+    model_name: str = "nomic-ai/nomic-embed-text-v1.5"
+    prefix_doc: str = "search_document: "
+    prefix_query: str = "search_query: "
+
+
 class TrainingConfig(BaseModel):
     """Configuration for training."""
     dataset_name: str = os.environ['TRAIN_DATASET_NAME']
@@ -42,3 +55,11 @@ class TrainingConfig(BaseModel):
     tfidf: TFIDFConfig = TFIDFConfig()
    
 
+class RunConfig(BaseModel):
+    """Configuration at run-time"""
+    docs_paths: str = DOCS_PATH
+    path_databases: str = PATH_DATABASES
+    path_datbase_sbert: str = PATH_DATABASE_SBERT
+    path_datbase_tfidf: str = PATH_DATABASE_TFIDF
+    sbert: BertConfig = BertConfig()
+    tfidf: TFIDFConfig = TFIDFConfig()
