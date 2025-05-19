@@ -3,7 +3,7 @@ import pickle
 
 import numpy as np
 import pandas as pd
-from typing import List, Literal
+from typing import Dict, List, Literal, Tuple, Union
 
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -72,7 +72,7 @@ class VectorDataset:
             self,
             query_vector: np.ndarray,
             return_type: Literal['dict','list','pandas'] = 'dict'
-        ) -> Dict[str, float]:
+        ) -> Union[Dict[str, float], List[float], pd.Series]:
         # Combine all document vectors into a matrix
         m = self.array()
 

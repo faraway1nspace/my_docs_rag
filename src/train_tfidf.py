@@ -1,12 +1,11 @@
 import os
 import pickle
-from sklearn.feature_extraction.text import TfidfVectorizer
 from datasets import load_dataset
 
 from typing import List, Tuple
 
 from src.config import SentencePieceConfig, TrainingConfig
-from src.retriever import SentencePieceTokenizer, TFIDFRetriever
+from src.retriever import SentencePieceTokenizer, TFIDF
 
 TEST_STRING = "The ideal candidate will have a background in business, tax, and legal contracts."
 
@@ -26,7 +25,7 @@ def train_tfidf(config: TrainingConfig = TrainingConfig()):
     print(tokenizer.tokenize(TEST_STRING))
 
     # instantiate TFIDF retriever for training
-    tfidf = TFIDFRetriever(
+    tfidf = TFIDF(
         tokenizer=tokenizer,
         config=config.tfidf
     )
@@ -38,7 +37,7 @@ def train_tfidf(config: TrainingConfig = TrainingConfig()):
     tfidf.save()
 
     # try reloading and testing
-    tfidf2 = TFIDFRetriever.load(config)
+    tfidf2 = TFIDF.load(config)
 
     # ensure reloading works
     diff = tfidf.vectorize([TEST_STRING])-tfidf2.vectorize([TEST_STRING])

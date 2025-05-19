@@ -2,6 +2,7 @@ import os
 import pickle
 import re
 
+import numpy as np
 import sentencepiece as spm
 
 from pydantic import BaseModel

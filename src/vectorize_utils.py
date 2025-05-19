@@ -16,11 +16,11 @@ from src.config import TrainingConfig, RunConfig
 from src.vectors import DocVector, VectorDataset
 
 
-class BaseCorpusVectorizer:
+class BaseCorpusProcessor:
     def __init__(self, database_path: str | None = None, run_config: RunConfig = RunConfig()):      
         self.run_config = run_config
         if database_path is None:
-            database_path = self.run_config.database_path
+            database_path = self.run_config.path_databases
         
         self.database_path = database_path
         # load the vector dataset
@@ -123,13 +123,13 @@ class BaseCorpusVectorizer:
 
 
 
-class TFIDFCorpusVectorizer(BaseCorpusVectorizer):
+class TFIDFCorpusProcessor(BaseCorpusProcessor):
     """Wrapper to vectorize a local directory of files by TFIDF."""
 
     def __init__(
             self, 
             retriever: TFIDF, 
-            path_database: str | None = None,
+            path_database: str,
             run_config: RunConfig = RunConfig()
         ):
         super().__init__(database_path=path_database, run_config=run_config)
@@ -141,13 +141,13 @@ class TFIDFCorpusVectorizer(BaseCorpusVectorizer):
         return embeddings
 
 
-class SBERTCorpusVectorizer(BaseCorpusVectorizer):
+class SBERTCorpusProcessor(BaseCorpusProcessor):
     """Wrapper to vectorize a local directory of files by TFIDF."""
 
     def __init__(
             self, 
             retriever: SBERT, 
-            path_database: str | None = None,
+            path_database: str,
             run_config: RunConfig = RunConfig()
         ):
         super().__init__(database_path=path_database, run_config=run_config)

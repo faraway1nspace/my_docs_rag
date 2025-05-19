@@ -60,7 +60,7 @@ class RunConfig(BaseModel):
     """Configuration at run-time"""
     docs_paths: str = DOCS_PATH
     path_databases: str = PATH_DATABASES
-    path_datbase_sbert: str = PATH_DATABASE_SBERT
-    path_datbase_tfidf: str = PATH_DATABASE_TFIDF
+    path_database_sbert: str = PATH_DATABASE_SBERT
+    path_database_tfidf: str = PATH_DATABASE_TFIDF
     sbert: BertConfig = BertConfig()
     tfidf: TFIDFConfig = TFIDFConfig()
