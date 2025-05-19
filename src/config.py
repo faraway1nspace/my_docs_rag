@@ -58,7 +58,7 @@ class TrainingConfig(BaseModel):
 
 class RunConfig(BaseModel):
     """Configuration at run-time"""
-    docs_paths: str = DOCS_PATH
+    docs_path: str = DOCS_PATH
     path_databases: str = PATH_DATABASES
     path_database_sbert: str = PATH_DATABASE_SBERT
     path_database_tfidf: str = PATH_DATABASE_TFIDF

@@ -113,8 +113,8 @@ class TFIDF:
     
     def vectorize_query(self, query: str) -> np.ndarray:
         """Embed a single string."""
-        query_tokens = ' '.join(self.tokenizer.tokenize(query))
-        query_vector = self.vectorizer.transform(doc_strings).toarray()
+        query_string_sp = ' '.join(self.tokenizer.tokenize(query))
+        query_vector = self.vectorizer.transform([query_string_sp]).toarray()
 
     def train(
         self,
@@ -178,10 +178,16 @@ class SBERT:
             else self._download_sbert(config)
         )
 
+    @staticmethod
     def _download_sbert(config:BertConfig = BertConfig()) -> SentenceTransformer:
         """Fetch model from Huggingface."""
-        self.vectorizer = SentenceTransformer(config.model_name)
-        self.vectorizer.eval()
+        sbert_model = SentenceTransformer(config.model_name)
+        sbert_model.eval()
+        return sbert_model
+
+    @classmethod
+    def load(cls, config:BertConfig = BertConfig()) -> 'SBERT':
+        return cls(vectorizer = None, config=config)
 
     def vectorize(
             self, 
