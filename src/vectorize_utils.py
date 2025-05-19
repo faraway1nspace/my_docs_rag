@@ -84,6 +84,14 @@ class BaseCorpusProcessor:
         """Embed a list of texts using a pre-trained model."""
         raise NotImplementedError("Subclasses must implement this method.")
 
+    def score(
+            self, 
+            query: str, 
+            return_type: Literal['dict','list','pandas'] = 'dict'
+        ) -> Union[Dict[str, float], List[float], pd.Series]:
+        """Calc cosine_similarity score for query-text across corpus-database."""
+        raise NotImplementedError("Subclasses must implement this method.")
+
     def vectorize_corpus(self, docs_path: str | None = None):
         """Extract text from a file, supporting docx, pdf, and txt formats."""
         if docs_path is None:
@@ -123,7 +131,7 @@ class BaseCorpusProcessor:
             self.save_database()
             
         else:
-            print("No new files to vectorize.")       
+            print("No new files to vectorize.")   
 
 
 
@@ -137,12 +145,20 @@ class TFIDFCorpusProcessor(BaseCorpusProcessor):
             run_config: RunConfig = RunConfig()
         ):
         super().__init__(database_path=path_database, run_config=run_config)
-        self.retriever = retriever       
+        self.retriever = retriever
+
+    def score(
+            self, 
+            query: str, 
+            return_type: Literal['dict','list','pandas'] = 'dict'
+        ) -> Union[Dict[str, float], List[float], pd.Series]:
+        """Calc cosine_similarity score for query-text across corpus-database."""
+        query_vector = self.retriever.vectorize_query(query)
+        return self.database.score(query_vector, return_type)     
         
     def embed_texts(self, texts:List[str]) -> np.ndarray:
         """Vectorize the list of texts using TFIDF."""
-        embeddings = self.retriever.vectorize(texts)
-        return embeddings
+        return self.retriever.vectorize(texts)
 
 
 class SBERTCorpusProcessor(BaseCorpusProcessor):
@@ -156,11 +172,17 @@ class SBERTCorpusProcessor(BaseCorpusProcessor):
         ):
         super().__init__(database_path=path_database, run_config=run_config)
         self.retriever = retriever  
+    
+    def score(
+            self, 
+            query: str, 
+            return_type: Literal['dict','list','pandas'] = 'dict'
+        ) -> Union[Dict[str, float], List[float], pd.Series]:
+        """Calc cosine_similarity score for query-text across corpus-database."""
+        query_vector = self.retriever.vectorize_query(query)
+        return self.database.score(query_vector, return_type)   
 
     def embed_texts(self, texts:List[str]) -> np.ndarray:
         """Vectorize the list of texts using TFIDF."""
-        embeddings = self.retriever.vectorize(
-            texts = texts
-        )
-        return embeddings
+        return self.retriever.vectorize(texts = texts)
 
