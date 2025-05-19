@@ -1,5 +1,3 @@
-"""Methods to vectorize all docx and pdf files in local directory"""
-# src/base_corpus_vectorizer.py
 import os
 import pickle
 import hashlib
@@ -9,34 +7,42 @@ from typing import Dict, Tuple
 import docx
 import PyPDF2
 
+import numpy as np
+
 from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
 
 from src.retriever import TFIDFRetriever
 from src.config import TrainingConfig
-
+from src.vectors import DocVector, VectorDataset
 
 # Base path for documents
 DOCS_PATH = "./docs"
 
-PATH_DATABASE_SBERT = "./database/sbert.pkl"
-PATH_DATABASE_TFIDF = "./database/tfidf.pkl"
+PATH_DATABASES = "./database"
+PATH_DATABASE_SBERT = f"{PATH_DATABASES}/sbert_vectors.pkl"
+PATH_DATABASE_TFIDF = f"{PATH_DATABASES}/tfidf_vectors.pkl"
 
 class BaseCorpusVectorizer:
     def __init__(self, database_path: str):
+        if not os.path.isdir(PATH_DATABASES):
+            os.makedirs(PATH_DATABASES,exist_ok=True)        
         self.database_path = database_path
-        self.database: Dict[str, Tuple[str, list]] = self.load_database()
+        # load the vector dataset
+        self.database: VectorDataset = self.load_database(database_path)
 
-    def load_database(self) -> Dict[str, Tuple[str, list]]:
-        """Load the vector database from a pickle file."""
-        if os.path.isfile(self.database_path):
-            with open(self.database_path, 'rb') as f:
-                return pickle.load(f)
-        return {}
+    def load_database(self, path: str | None) -> VectorDataset:
+        """Load a vectorized corpus of documents."""
+        if path is None:
+            path = self.database_path
+        vector_database = VectorDataset.load(path)
+        return vector_database
 
-    def save_database(self):
+    def save_database(self, path: str | None = None):
         """Save the vector database to a pickle file."""
-        with open(self.database_path, 'wb') as f:
-            pickle.dump(self.database, f)
+        if path is None:
+            path = self.database_path        
+        self.database.save(path)
 
     def hash_file(self, filepath: str) -> str:
         """Generate a hash for a file based on its content."""
@@ -82,34 +88,45 @@ class BaseCorpusVectorizer:
 
 
 class TFIDFCorpusVectorizer(BaseCorpusVectorizer):
-    def __init__(self, retriever: TFIDFRetriever):
-        super().__init__(database_path=PATH_DATABASE_TFIDF)
+    """Wrapper to vectorize a local directory of files by TFIDF."""
+
+    def __init__(self, retriever: TFIDFRetriever, path_database:str = PATH_DATABASE_TFIDF):
+        super().__init__(database_path=path_database)
         self.retriever = retriever
 
-    def vectorize_corpus(self):
+    def vectorize_corpus(self, docs_path: str = DOCS_PATH):
         """Vectorize the documents using TFIDF and update the database."""
-        files = glob.glob(os.path.join(DOCS_PATH, "*"))
-        new_files = []
 
-        for filepath in files:
-            file_hash = self.hash_file(filepath)
-            if file_hash not in self.database:
+        files_to_vectorize = glob.glob(os.path.join(docs_path, "*"))
+        new_files:List[str] = [] # new files
+        files_in_corpus = self.database.filenames # files already in corpus
+        for filepath in files_to_vectorize:
+            filename = filepath.split('/')[-1]
+            # only vectorize new files
+            if filename not in files_in_corpus:
                 print(f"Vectorizing new file: {filepath}")
                 text = self.extract_text(filepath)
                 vector = self.retriever.vectorize([text])[0]
-                self.database[file_hash] = (filepath, vector)
+                self.database.append(
+                    DocVector(
+                        filename=filepath.split('/')[-1],
+                        vector=vector,
+                        path=filepath,
+                        text=text
+                    )
+                )
                 new_files.append(filepath)
 
         if new_files:
             self.save_database()
             print(f"Updated TFIDF database with {len(new_files)} new files.")
         else:
-            print("No new files to vectorize.")
+            print("No new files to vectorize.")        
 
 
 class SBERTCorpusVectorizer(BaseCorpusVectorizer):
-    def __init__(self, model_name: str):
-        super().__init__(database_path=PATH_DATABASE_SBERT)
+    def __init__(self, model_name: str, path_database:str = PATH_DATABASE_SBERT):
+        super().__init__(database_path=path_database)
         self.model = SentenceTransformer(model_name)
 
     def vectorize_corpus(self):
