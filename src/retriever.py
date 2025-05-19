@@ -34,6 +34,32 @@ class SentencePieceTokenizer:
         return text
 
     @classmethod
+    def train(
+            cls, 
+            path_sp_training: str | None = None,  
+            config: SentencePieceConfig = SentencePieceConfig()
+    ) -> 'SentencePieceTokenizer':
+        """Train SentencePiece tokenizer (and save locally)."""
+
+        if path_sp_training is None:
+            path_sp_training = config.sp_train_file
+        assert os.path.isfile(path_sp_training)
+
+        # run the spm trainer
+        spm.SentencePieceTrainer.train(
+            input=path_sp_training,
+            model_prefix=config.model_prefix,
+            vocab_size=config.vocab_size,
+            character_coverage=config.character_coverage,
+            model_type='bpe'
+        )
+
+        # reload the sp model as a tokenizer
+        tokenizer = cls.load(config=config)    
+
+        return tokenizer
+
+    @classmethod
     def load(cls, config: SentencePieceConfig = SentencePieceConfig()) -> 'SentencePieceTokenizer':
         return SentencePieceTokenizer(
             model_path=config.model_prefix + ".model"
@@ -103,7 +129,6 @@ class TFIDF:
 
         # train the tfidf vectorizer
         self.vectorizer.fit(doc_strings)
-
 
     def save(self, vectorizer_path: str|None=None):
         if vectorizer_path is None:

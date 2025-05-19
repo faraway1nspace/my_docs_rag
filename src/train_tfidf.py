@@ -2,11 +2,10 @@ import os
 import pickle
 from sklearn.feature_extraction.text import TfidfVectorizer
 from datasets import load_dataset
-import sentencepiece as spm
 
-from typing import List
+from typing import List, Tuple
 
-from src.config import TrainingConfig
+from src.config import SentencePieceConfig, TrainingConfig
 from src.retriever import SentencePieceTokenizer, TFIDFRetriever
 
 TEST_STRING = "The ideal candidate will have a background in business, tax, and legal contracts."
@@ -15,19 +14,13 @@ def train_tfidf(config: TrainingConfig = TrainingConfig()):
     """Trains the TFIDF Vectorizer and SentencePiece tokenizer."""
 
     # save locally to reload through SP
-    corpus = make_tfidf_training_set(config)
+    corpus, path_corpus_text_for_sp = make_tfidf_training_set(config)
     
     # Train SentencePiece tokenizer (and save locally)
-    spm.SentencePieceTrainer.train(
-        input=config.sp.sp_train_file,
-        model_prefix=config.sp.model_prefix,
-        vocab_size=config.sp.vocab_size,
-        character_coverage=config.sp.character_coverage,
-        model_type='bpe'
+    tokenizer = SentencePieceTokenizer.train(
+        path_sp_training = path_corpus_text_for_sp,  
+        config = SentencePieceConfig()
     )
-
-    # reload the sp model as a tokenizer
-    tokenizer = SentencePieceTokenizer.load(config=config.sp)
 
     # test the tokenizer
     print(tokenizer.tokenize(TEST_STRING))
@@ -54,10 +47,8 @@ def train_tfidf(config: TrainingConfig = TrainingConfig()):
     # demo the retrieval
     print('Done training the TFIDF and tokenizer.')
 
-    
 
-
-def make_tfidf_training_set(config: TrainingConfig) -> List[str]:
+def make_tfidf_training_set(config: TrainingConfig) -> Tuple[List[str],str]:
     """Downloads a HF dataset and saves text to a SentencePiece dataset"""
     
     data = load_dataset(config.dataset_name)
@@ -83,7 +74,8 @@ def make_tfidf_training_set(config: TrainingConfig) -> List[str]:
             # write to file for sentencepiece training
             filecon.write(text_cleaned + "\n")
 
-    return corpus # return for other processes
+    # return for other processes, and the sentencepiece file
+    return corpus, config.sp.sp_train_file 
     
             
 
