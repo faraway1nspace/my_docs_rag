@@ -193,7 +193,7 @@ class SBERT:
     def vectorize(
             self, 
             texts: List[str],
-            prefix: str | None,
+            prefix: str | None=None,
             batch_size: int | None = None
     ) -> np.ndarray:
         """Embed a list of texts using the SBERT model."""
@@ -227,6 +227,6 @@ class SBERT:
             [texts_with_prefix], convert_to_tensor=True
         )
         # Convert embeddings to numpy array
-        return embeddings.cpu().numpy()[0] 
+        return embeddings.cpu().numpy()
 
         
