@@ -105,9 +105,15 @@ class TFIDF:
         ] 
 
     def vectorize(self, docs: List[str]):
+        """Embed a list of documents."""
         doc_tokenized = self.tokenize(docs)
         doc_strings = [' '.join(tokens) for tokens in doc_tokenized]
         return self.vectorizer.transform(doc_strings).toarray()
+    
+    def vectorize_query(self, query: str) -> np.ndarray:
+        """Embed a single string."""
+        query_tokens = ' '.join(self.tokenizer.tokenize(query))
+        query_vector = self.vectorizer.transform(doc_strings).toarray()
 
     def train(
         self,
@@ -174,5 +180,44 @@ class SBERT:
     def _download_sbert(config:BertConfig = BertConfig()) -> SentenceTransformer:
         """Fetch model from Huggingface."""
         self.vectorizer = SentenceTransformer(config.model_name)
+
+    def vectorize(
+            self, 
+            texts: List[str],
+            prefix: str | None,
+            batch_size: int | None = None
+    ) -> np.ndarray:
+        """Embed a list of texts using the SBERT model."""
+        if prefix is None:
+            # assume that the prefix is a document
+            prefix = self.config.prefix_doc
+        if batch_size is None:
+            # assume that the prefix is a document
+            batch_size = self.config.batch_size            
+        
+        # Prepend the prefix to each text if specified
+        texts_with_prefix = [prefix + text for text in texts]
+        # Generate embeddings
+        embeddings = self.vectorizer.encode(
+            texts_with_prefix, 
+            convert_to_tensor=True,
+            batch_size=batch_size
+        )
+        # Convert embeddings to numpy array
+        return embeddings.cpu().numpy()
+    
+    def vectorize_query(self, query: str, prefix: str | None = None) -> np.ndarray:
+        """Embed a single string."""
+        if prefix is None:
+            # assume that the prefix is a document
+            prefix = self.config.prefix_query       
+        
+        # Prepend the prefix to each text if specified
+        texts_with_prefix = prefix + query
+        embeddings = self.vectorizer.encode(
+            [texts_with_prefix], convert_to_tensor=True
+        )
+        # Convert embeddings to numpy array
+        return embeddings.cpu().numpy()[0] 
 
         

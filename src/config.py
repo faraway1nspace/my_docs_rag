@@ -45,6 +45,7 @@ class BertConfig(BaseModel):
     model_name: str = "nomic-ai/nomic-embed-text-v1.5"
     prefix_doc: str = "search_document: "
     prefix_query: str = "search_query: "
+    batch_size: int = 16
 
 
 class TrainingConfig(BaseModel):
