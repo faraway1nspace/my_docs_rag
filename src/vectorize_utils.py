@@ -11,7 +11,7 @@ import numpy as np
 
 from sklearn.metrics.pairwise import cosine_similarity
 
-from src.retriever import TFIDFRetriever, SBERTRetriever
+from src.retriever import TFIDF, SBERT
 from src.config import TrainingConfig, RunConfig
 from src.vectors import DocVector, VectorDataset
 
@@ -128,7 +128,7 @@ class TFIDFCorpusVectorizer(BaseCorpusVectorizer):
 
     def __init__(
             self, 
-            retriever: TFIDFRetriever, 
+            retriever: TFIDF, 
             path_database: str | None = None,
             run_config: RunConfig = RunConfig()
         ):
@@ -142,9 +142,16 @@ class TFIDFCorpusVectorizer(BaseCorpusVectorizer):
 
 
 class SBERTCorpusVectorizer(BaseCorpusVectorizer):
-    def __init__(self, model_name: str, path_database: str | None = None, run_config: RunConfig = RunConfig()):
+    """Wrapper to vectorize a local directory of files by TFIDF."""
+
+    def __init__(
+            self, 
+            retriever: SBERT, 
+            path_database: str | None = None,
+            run_config: RunConfig = RunConfig()
+        ):
         super().__init__(database_path=path_database, run_config=run_config)
-        self.model = SentenceTransformer(model_name)
+        self.retriever = retriever  
 
     def embed_texts(self, texts:List[str]) -> np.ndarray:
         """Vectorize the list of texts using TFIDF."""
