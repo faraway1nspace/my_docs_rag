@@ -26,6 +26,12 @@ class BaseCorpusProcessor:
         # load the vector dataset
         self.database: VectorDataset = self.load_database(database_path)
 
+    def __len__(self) -> int:
+        return len(self.database.docs)
+
+    def __getitem__(self, idx)->DocVector:
+        return self.database.docs[idx]
+
     def load_database(self, path: str | None) -> VectorDataset:
         """Load a vectorized corpus of documents."""
         if path is None:
