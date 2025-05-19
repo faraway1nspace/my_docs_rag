@@ -64,3 +64,4 @@ class RunConfig(BaseModel):
     path_database_tfidf: str = PATH_DATABASE_TFIDF
     sbert: BertConfig = BertConfig()
     tfidf: TFIDFConfig = TFIDFConfig()
+    training_config: TrainingConfig = TrainingConfig()
