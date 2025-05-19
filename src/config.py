@@ -17,7 +17,7 @@ PATH_DATABASE_SBERT = f"{PATH_DATABASES}/sbert_vectors.pkl"
 PATH_DATABASE_TFIDF = f"{PATH_DATABASES}/tfidf_vectors.pkl"
 
 
-for _dir in [PATH_TFIDF, DOCS_PATH, PATH_DATABASES]
+for _dir in [PATH_TFIDF, DOCS_PATH, PATH_DATABASES]:
     if not os.path.isdir(_dir):
         os.makedirs(_dir, exist_ok=True)
 

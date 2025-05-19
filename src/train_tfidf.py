@@ -12,6 +12,7 @@ from src.retriever import SentencePieceTokenizer, TFIDFRetriever
 TEST_STRING = "The ideal candidate will have a background in business, tax, and legal contracts."
 
 def train_tfidf(config: TrainingConfig = TrainingConfig()):
+    """Trains the TFIDF Vectorizer and SentencePiece tokenizer."""
 
     # save locally to reload through SP
     corpus = make_tfidf_training_set(config)
