@@ -9,16 +9,19 @@ import PyPDF2
 
 import numpy as np
 
-from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from src.retriever import TFIDFRetriever
+from src.retriever import TFIDFRetriever, SBERTRetriever
 from src.config import TrainingConfig, RunConfig
 from src.vectors import DocVector, VectorDataset
 
 
 class BaseCorpusVectorizer:
-    def __init__(self, database_path: str):      
+    def __init__(self, database_path: str | None = None, run_config: RunConfig = RunConfig()):      
+        self.run_config = run_config
+        if database_path is None:
+            database_path = self.run_config.database_path
+        
         self.database_path = database_path
         # load the vector dataset
         self.database: VectorDataset = self.load_database(database_path)
@@ -73,83 +76,78 @@ class BaseCorpusVectorizer:
         with open(filepath, 'r', encoding='utf-8') as file:
             return file.read()
 
-    def vectorize_corpus(self):
-        """Abstract method for vectorizing the corpus, to be implemented by child classes."""
-        raise NotImplementedError("This method should be implemented by subclasses.")
+    def embed_texts(self, texts: List[str]) -> np.ndarray:
+        """Embed a list of texts using a pre-trained model."""
+        raise NotImplementedError("Subclasses must implement this method.")
+
+    def vectorize_corpus(self, docs_path: str | None = None):
+        """Extract text from a file, supporting docx, pdf, and txt formats."""
+        if docs_path is None:
+            docs_path = self.run_config.docs_path
+        files_to_load = glob.glob(os.path.join(docs_path, "*"))
+        found_new_paths:List[str] = [] # new files
+        files_in_corpus = self.database.filenames # files already in corpus
+        for filepath in files_to_load:
+            filename = filepath.split('/')[-1]
+            # only extract text from new files
+            if filename not in files_in_corpus:
+                print(f"Extract text from new file: {filepath}")
+                text = self.extract_text(filepath)
+                self.database.append(
+                    DocVector(
+                        filename=filename,
+                        vector=None,
+                        path=filepath,
+                        text=text
+                    )
+                )
+                found_new_paths.append(filepath)
+
+        if found_new_paths:
+            print(f"Extracted text from {len(found_new_paths)} new files: {found_new_paths}")
+
+            # for new docs, get their text that require embedding
+            text_to_embed, indices_to_embed = self.database.text_to_embed
+
+            # embed new text (child method)
+            embeddings = self.embed_texts(text_to_embed)
+            
+            # insert embeddings into docs
+            self.database.insert_embeddings(embeddings, indices_to_embed)
+
+            # pickle the database
+            self.save_database()
+            
+        else:
+            print("No new files to vectorize.")       
 
 
 
 class TFIDFCorpusVectorizer(BaseCorpusVectorizer):
     """Wrapper to vectorize a local directory of files by TFIDF."""
 
-    def __init__(self, retriever: TFIDFRetriever, path_database:str = PATH_DATABASE_TFIDF):
-        super().__init__(database_path=path_database)
-        self.retriever = retriever
-
-    def vectorize_corpus(self, docs_path: str = DOCS_PATH):
-        """Vectorize the documents using TFIDF and update the database."""
-
-        files_to_vectorize = glob.glob(os.path.join(docs_path, "*"))
-        new_files:List[str] = [] # new files
-        files_in_corpus = self.database.filenames # files already in corpus
-        for filepath in files_to_vectorize:
-            filename = filepath.split('/')[-1]
-            # only vectorize new files
-            if filename not in files_in_corpus:
-                print(f"Vectorizing new file: {filepath}")
-                text = self.extract_text(filepath)
-                vector = self.retriever.vectorize([text])[0]
-                self.database.append(
-                    DocVector(
-                        filename=filename,
-                        vector=vector,
-                        path=filepath,
-                        text=text
-                    )
-                )
-                new_files.append(filepath)
-
-        if new_files:
-            self.save_database()
-            print(f"Updated TFIDF database with {len(new_files)} new files.")
-        else:
-            print("No new files to vectorize.")        
+    def __init__(
+            self, 
+            retriever: TFIDFRetriever, 
+            path_database: str | None = None,
+            run_config: RunConfig = RunConfig()
+        ):
+        super().__init__(database_path=path_database, run_config=run_config)
+        self.retriever = retriever       
+        
+    def embed_texts(self, texts:List[str]) -> np.ndarray:
+        """Vectorize the list of texts using TFIDF."""
+        embeddings = self.retriever.vectorize(texts)
+        return embeddings
 
 
 class SBERTCorpusVectorizer(BaseCorpusVectorizer):
-    def __init__(self, model_name: str, path_database:str = PATH_DATABASE_SBERT):
-        super().__init__(database_path=path_database)
+    def __init__(self, model_name: str, path_database: str | None = None, run_config: RunConfig = RunConfig()):
+        super().__init__(database_path=path_database, run_config=run_config)
         self.model = SentenceTransformer(model_name)
 
-    def vectorize_corpus(self):
-        """Vectorize the documents using SBERT and update the database."""
-        files = glob.glob(os.path.join(DOCS_PATH, "*"))
-        new_files = []
+    def embed_texts(self, texts:List[str]) -> np.ndarray:
+        """Vectorize the list of texts using TFIDF."""
+        embeddings = self.retriever.vectorize(texts)
+        return embeddings
 
-        for filepath in files:
-            file_hash = self.hash_file(filepath)
-            if file_hash not in self.database:
-                print(f"Vectorizing new file: {filepath}")
-                text = self.extract_text(filepath)
-                vector = self.model.encode(text, convert_to_numpy=True).tolist()
-                self.database[file_hash] = (filepath, vector)
-                new_files.append(filepath)
-
-        if new_files:
-            self.save_database()
-            print(f"Updated SBERT database with {len(new_files)} new files.")
-        else:
-            print("No new files to vectorize.")
-
-# Usage
-if __name__ == "__main__":
-    config = TrainingConfig()
-    
-    # TFIDF Vectorization
-    tfidf_retriever = TFIDFRetriever.load(config)
-    tfidf_vectorizer = TFIDFCorpusVectorizer(tfidf_retriever)
-    tfidf_vectorizer.vectorize_corpus()
-
-    # SBERT Vectorization
-    sbert_vectorizer = SBERTCorpusVectorizer(config.sbert_model_string)
-    sbert_vectorizer.vectorize_corpus()

@@ -5,13 +5,15 @@ import re
 import sentencepiece as spm
 
 from pydantic import BaseModel
-from typing import List, Dict
+from sentence_transformers import SentenceTransformer
 from sklearn.feature_extraction.text import TfidfVectorizer
+from typing import List, Dict
 
-from src.config import TFIDFConfig, TrainingConfig, SentencePieceConfig
+from src.config import BertConfig, TFIDFConfig, TrainingConfig, SentencePieceConfig
 
 
 class SentencePieceTokenizer:
+    """Tokenizes text by BPE for TFIDF."""
     
     def __init__(self, model_path: str | None = None):
         self.model_path = model_path
@@ -38,14 +40,15 @@ class SentencePieceTokenizer:
         )
 
 
-class TFIDFRetriever:
-
+class TFIDF:
+    """TFIDF vectorizer with SentencePiece tokenizer for retrieval."""
     def __init__(
             self, 
             vectorizer: TfidfVectorizer | None = None, 
             tokenizer: SentencePieceTokenizer | None = None,
             config:TFIDFConfig = TFIDFConfig()
     ):
+        self.config = config
         # attach tfidf vectorizer (or re-initialize blank)
         self.vectorizer = (
             vectorizer 
@@ -67,7 +70,7 @@ class TFIDFRetriever:
             if tokenizer is not None
             else SentencePieceTokenizer.load()
         )
-        self.config = config
+
 
     def tokenize(self, texts: List[str]) -> List[List[str]]:
         return [
@@ -110,7 +113,7 @@ class TFIDFRetriever:
             pickle.dump(self.vectorizer, f)
 
     @classmethod
-    def load(cls, config:TrainingConfig = TrainingConfig()) -> 'TFIDFRetriever':
+    def load(cls, config:TrainingConfig = TrainingConfig()) -> 'TFIDF':
         vectorizer_path = config.tfidf.model_path
         assert os.path.isfile(vectorizer_path)
 
@@ -126,3 +129,25 @@ class TFIDFRetriever:
             tokenizer=tokenizer,
             config=config.tfidf
         )
+
+
+class SBERT:
+
+    def __init__(
+            self, 
+            vectorizer: SentenceTransformer | None = None, 
+            config:BertConfig = BertConfig()
+    ):
+        self.config = config
+        # attach tfidf vectorizer (or re-initialize blank)
+        self.vectorizer = (
+            vectorizer 
+            if (vectorizer is not None) 
+            else self._download_sbert(config)
+        )
+
+    def _download_sbert(config:BertConfig = BertConfig()) -> SentenceTransformer:
+        """Fetch model from Huggingface."""
+        self.vectorizer = SentenceTransformer(config.model_name)
+
+        
