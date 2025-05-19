@@ -159,6 +159,8 @@ class SBERTCorpusProcessor(BaseCorpusProcessor):
 
     def embed_texts(self, texts:List[str]) -> np.ndarray:
         """Vectorize the list of texts using TFIDF."""
-        embeddings = self.retriever.vectorize(texts)
+        embeddings = self.retriever.vectorize(
+            texts = texts
+        )
         return embeddings
 
