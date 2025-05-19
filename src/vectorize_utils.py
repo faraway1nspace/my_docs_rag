@@ -30,8 +30,12 @@ class BaseCorpusProcessor:
         """Load a vectorized corpus of documents."""
         if path is None:
             path = self.database_path
-        vector_database = VectorDataset.load(path)
-        return vector_database
+        if os.path.isfile(path):
+            vector_database = VectorDataset.load(path)
+            print(f"Loaded {path} vector database with {len(vector_database)} documents.")
+            return vector_database
+        print(f'Empty dataset: no file existing {path}')
+        return VectorDataset(docs=[])
 
     def save_database(self, path: str | None = None):
         """Save the vector database to a pickle file."""

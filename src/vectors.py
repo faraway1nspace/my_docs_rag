@@ -113,13 +113,13 @@ class VectorDataset:
     @classmethod
     def load(cls, path:str) -> 'VectorDataset':
         """Load the vector database from a pickle file."""
-        vector_database = VectorDataset()
+        docs:List[DocVector] = []
         if os.path.isfile(path):
             with open(path, 'rb') as f:
                 while True:
                     try:
-                        vector_database.append(DocVector.load(pickle.load(f)))
+                        docs.append(DocVector.load(pickle.load(f)))
                     except EOFError:
                         break
-        return vector_database
+        return cls(docs=docs)
 

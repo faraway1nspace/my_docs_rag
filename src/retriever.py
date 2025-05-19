@@ -115,6 +115,7 @@ class TFIDF:
         """Embed a single string."""
         query_string_sp = ' '.join(self.tokenizer.tokenize(query))
         query_vector = self.vectorizer.transform([query_string_sp]).toarray()
+        return query_vector
 
     def train(
         self,
@@ -181,7 +182,7 @@ class SBERT:
     @staticmethod
     def _download_sbert(config:BertConfig = BertConfig()) -> SentenceTransformer:
         """Fetch model from Huggingface."""
-        sbert_model = SentenceTransformer(config.model_name)
+        sbert_model = SentenceTransformer(config.model_name, trust_remote_code=True)
         sbert_model.eval()
         return sbert_model
 
