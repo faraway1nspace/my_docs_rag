@@ -163,7 +163,7 @@ class TFIDF:
 
 
 class SBERT:
-
+    """Wrapper for SentenceTransformer for retrieval."""
     def __init__(
             self, 
             vectorizer: SentenceTransformer | None = None, 
@@ -180,6 +180,7 @@ class SBERT:
     def _download_sbert(config:BertConfig = BertConfig()) -> SentenceTransformer:
         """Fetch model from Huggingface."""
         self.vectorizer = SentenceTransformer(config.model_name)
+        self.vectorizer.eval()
 
     def vectorize(
             self, 
