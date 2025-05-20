@@ -14,6 +14,7 @@ class DocVector:
     path:str | None = ""    
     text:str | None = None
     vector: np.ndarray | None = None
+    score: int | None = None
 
     def __init__(
             self,
@@ -21,11 +22,13 @@ class DocVector:
             vector: np.ndarray,
             path: str,
             text: str | None = None
+            score: int | None = None
     ):
         self.filename = filename
         self.vector = vector
         self.path = path
         self.text = text
+        self.score = score
 
     def to_dict(self):
         return {
@@ -33,6 +36,7 @@ class DocVector:
             "path": self.path,     
             "text": self.text,                 
             "vector": self.vector.tolist(),
+            "score": self.score
         }
 
     @classmethod
@@ -40,8 +44,9 @@ class DocVector:
         return DocVector(
             filename=a["filename"],
             path=a["path"],   
-            text=a["text"],
+            text=a.get("text",""),
             vector=np.array(a["vector"]),
+            score=a.get('score',None)
         )
 
 
@@ -71,19 +76,28 @@ class VectorDataset:
     def score(
             self,
             query_vector: np.ndarray,
-            return_type: Literal['dict','list','pandas'] = 'dict'
+            return_type: Literal['doc','dict','list','pandas'] = 'dict'
         ) -> Union[Dict[str, float], List[float], pd.Series]:
         # Combine all document vectors into a matrix
         m = self.array()
 
         # compute the cosine similarity between query vector and m
         similarities = cosine_similarity(query_vector, m).flatten()
+
+        # set the scores on the DocVector objects
+        for doc, score in zip(self.docs, similarities):
+            doc.score = score
+        
+        if return_type=="doc":
+            return self.docs
+        
+        # for other return types, collect scores as dictionary, then convert
         scores = {
             doc.filename: float(score) for doc, score in zip(self.docs, similarities)
-        }
+        }        
         if return_type=='list':
             return list(scores.values())
-        elif return_type=='pandas':
+        if return_type=='pandas':
             return pd.Series(scores)
         return scores
 
