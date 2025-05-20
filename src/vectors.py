@@ -21,7 +21,7 @@ class DocVector:
             filename: str,
             vector: np.ndarray,
             path: str,
-            text: str | None = None
+            text: str | None = None,
             score: int | None = None
     ):
         self.filename = filename

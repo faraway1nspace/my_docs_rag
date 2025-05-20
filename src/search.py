@@ -1,12 +1,14 @@
-"""Search via tfidf and dense-retrieval of local documents (pdf, word)."""
-
+## Search class
 import os
 import logging
+from typing import List, Literal
 
-from src.train_tfidf import train_tfidf
-from src.corpus_processors import TFIDFCorpusProcessor, SBERTCorpusProcessor
 from src.config import RunConfig
+from src.corpus_processors import TFIDFCorpusProcessor, SBERTCorpusProcessor
 from src.retriever import TFIDF, SBERT
+from src.train_tfidf import train_tfidf
+from src.vectors import DocVector
+
 
 logging.getLogger().setLevel(logging.INFO)
 
@@ -45,20 +47,20 @@ class Search:
             tfidf_retriever = TFIDF.load(self.config.tfidf_config)
             logging.info("=== Loaded TFIDF retriever")
             self.tfidf_corpus_processor = TFIDFCorpusProcessor(
-                retriever=tfidf_retriever, 
-                path_database=self.config.path_database_tfidf, 
+                retriever=tfidf_retriever,
+                path_database=self.config.path_database_tfidf,
                 run_config=self.config
             )
             logging.info("=== Loaded TFIDF corpus processor")
-            
+
 
         if self.config.sbert.do_sbert:
             # load the SBERT
             sbert_retriever = SBERT.load(self.config.sbert)
             logging.info("=== Loaded SBERT retriever")
             self.sbert_corpus_processor = SBERTCorpusProcessor(
-                retriever=sbert_retriever, 
-                path_database=self.config.path_database_sbert, 
+                retriever=sbert_retriever,
+                path_database=self.config.path_database_sbert,
                 run_config=self.config
             )
             logging.info("=== Loaded SBERT corpus procesor")
@@ -72,7 +74,7 @@ class Search:
                 self._initialize_retrievers()
 
             self.tfidf_corpus_processor.vectorize_corpus()
-            logging.info("=== Done getting TFIDF vectors from local documents.===")  
+            logging.info("=== Done getting TFIDF vectors from local documents.===")
 
         if self.config.sbert.do_sbert:
             try:
@@ -81,37 +83,45 @@ class Search:
                 self._initialize_retrievers()
             self.sbert_corpus_processor.vectorize_corpus()
             logging.info("=== Done getting SBERT vectors from local documents.===")
-            
-    def _search_sparse(self, query: str, k: int) -> List[str]:
-        """Search the corpus using TFIDF and return top k diverse results."""
-        scores = self.tfidf_corpus_processor.score(query, return_type='dict')
-        sorted_docs = sorted(scores.items(), key=lambda item: item[1], reverse=True)
-        top_k_docs = self._filter_redundant_results(sorted_docs, k, self.config.tfidf.max_similarity_threshold)
-        return [self.tfidf_corpus_processor[doc_idx].text for doc_idx in top_k_docs]
 
-    def _search_dense(self, query: str, k: int) -> List[str]:
-        """Search the corpus using SBERT and return top k diverse results."""
-        scores = self.sbert_corpus_processor.score(query, return_type='dict')
-        sorted_docs = sorted(scores.items(), key=lambda item: item[1], reverse=True)
-        top_k_docs = self._filter_redundant_results(sorted_docs, k, self.config.sbert.max_similarity_threshold)
-        return [self.sbert_corpus_processor[doc_idx].text for doc_idx in top_k_docs]
-
-    def _filter_redundant_results(self, sorted_docs: List[Tuple[str, float]], k: int, max_similarity_threshold: float) -> List[int]:
+    def _filter_topk(self, sorted_docs: List[DocVector], k: int = 3, max_similarity: float = 0.95) -> List[DocVector]:
         """Filter out redundant results based on cosine similarity thresholds."""
-        heterogenous_results: List[int] = []
-        for doc_idx, (filename, score) in enumerate(sorted_docs):
-            if len(heterogenous_results) >= k:
+        if len(sorted_docs) <= k:
+            return sorted_docs
+        top_k_results: List[DocVector] = []
+        for candidate_doc in sorted_docs:
+            if len(top_k_results) >= k:
                 break
             is_redundant = False
-            for prev_doc_idx in heterogenous_results:
-                prev_vector = self.tfidf_corpus_processor[prev_doc_idx].vector
-                current_vector = self.tfidf_corpus_processor[doc_idx].vector
-                similarity = cosine_similarity([prev_vector], [current_vector])[0][0]
-                if similarity > max_similarity_threshold:
+            for prev_doc in top_k_results:
+                similarity = cosine_similarity([prev_doc.vector], [candidate_doc.vector])[0][0]
+                if similarity > max_similarity:
                     is_redundant = True
                     break
             if not is_redundant:
-                heterogenous_results.append(doc_idx)
-        return heterogenous_results       
-        
+                top_k_results.append(candidate_doc)
+        return top_k_results
 
+    def _search_sparse(self, query: str, k: int = 3) -> List[str]:
+        """Search the corpus using TFIDF and return top k non-similar results."""
+        docs_scored = self.tfidf_corpus_processor.score(query, return_type='doc')
+        docs_sorted = sorted(docs_scored, key = lambda x: x.b, reverse=True)
+        # get top k docs and ensure they are not too similar
+        top_k_docs = self._filter_topk(docs_sorted, k, self.config.max_similarity)
+        return [doc.text for doc in top_k_docs]
+
+    def _search_dense(self, query: str, k: int = 3) -> List[str]:
+        """Search the corpus using SBERT and return top k non-similar results."""
+        docs_scored = self.sbert_corpus_processor.score(query, return_type='doc')
+        docs_sorted = sorted(docs_scored, key = lambda x: x.b, reverse=True)
+        # get top k docs and ensure they are not too similar
+        top_k_docs = self._filter_topk(docs_sorted, k, self.config.max_similarity)
+        return [doc.text for doc in top_k_docs]
+
+    def search(self, query: str, k: int = 3, method: Literal['sparse','dense','both']="sparse") -> List[str]:
+        """Search the corpus using TFIDF and/or SBERT and return top k diverse non-similar results."""
+        if method == 'sparse':
+            return self._search_sparse(query, k)
+        elif method == 'dense':
+            return self._search_dense(query, k)
+        raise NotImplementedError(f"Method '{method}' not implemented yet.")

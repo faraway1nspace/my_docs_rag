@@ -67,6 +67,7 @@ class RunConfig(BaseModel):
     path_databases: str = PATH_DATABASES
     path_database_sbert: str = PATH_DATABASE_SBERT
     path_database_tfidf: str = PATH_DATABASE_TFIDF
+    max_similarity: float = 0.95
     sbert: BertConfig = BertConfig()
     tfidf: TFIDFConfig = TFIDFConfig()
     training_config: TrainingConfig = TrainingConfig()
