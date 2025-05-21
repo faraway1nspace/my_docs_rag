@@ -2,6 +2,7 @@
 import os
 import logging
 from typing import List, Literal
+from sklearn.metrics.pairwise import cosine_similarity
 
 from src.config import RunConfig
 from src.corpus_processors import TFIDFCorpusProcessor, SBERTCorpusProcessor
@@ -33,17 +34,17 @@ class Search:
         if self.config.tfidf.do_tfidf:
 
             # check if TFIDF vectorizer exists
-            tfidf_exists = os.path.isfile(self.config.tfidf_config.model_path)
+            tfidf_exists = os.path.isfile(self.config.tfidf.model_path)
             sp_exists = os.path.isfile(self.config.training_config.sp.model_prefix + ".model")
 
             if (not tfidf_exists) or (not sp_exists):
 
                 # do TFIDF training if neither exist already
                 logging.info("=== Training TFIDF and SentencePiece vectorizer ===")
-                train_tfidf(self.config)
+                train_tfidf(self.config.training_config)
 
             # load the TFIDF
-            tfidf_retriever = TFIDF.load(self.config.tfidf_config)
+            tfidf_retriever = TFIDF.load(self.config.training_config)
             logging.info("=== Loaded TFIDF retriever")
             self.tfidf_corpus_processor = TFIDFCorpusProcessor(
                 retriever=tfidf_retriever,
@@ -104,7 +105,7 @@ class Search:
     def _search_sparse(self, query: str, k: int = 3) -> List[str]:
         """Search the corpus using TFIDF and return top k non-similar results."""
         docs_scored = self.tfidf_corpus_processor.score(query, return_type='doc')
-        docs_sorted = sorted(docs_scored, key = lambda x: x.b, reverse=True)
+        docs_sorted = sorted(docs_scored, key = lambda x: x.score, reverse=True)
         # get top k docs and ensure they are not too similar
         top_k_docs = self._filter_topk(docs_sorted, k, self.config.max_similarity)
         return [doc.text for doc in top_k_docs]
@@ -112,7 +113,7 @@ class Search:
     def _search_dense(self, query: str, k: int = 3) -> List[str]:
         """Search the corpus using SBERT and return top k non-similar results."""
         docs_scored = self.sbert_corpus_processor.score(query, return_type='doc')
-        docs_sorted = sorted(docs_scored, key = lambda x: x.b, reverse=True)
+        docs_sorted = sorted(docs_scored, key = lambda x: x.score, reverse=True)
         # get top k docs and ensure they are not too similar
         top_k_docs = self._filter_topk(docs_sorted, k, self.config.max_similarity)
         return [doc.text for doc in top_k_docs]
