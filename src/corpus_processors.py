@@ -30,16 +30,9 @@ class BaseCorpusProcessor:
     def __len__(self) -> int:
         return len(self.database.docs)
 
-    def __getitem__(self, idx: Union[str, int])->DocVector:
+    def __getitem__(self, idx: Union[str, int]) -> DocVector:
         """Get item key can be an int or filename."""
-        if isinstance(idx, int):
-            return self.database.docs[idx]
-        elif isinstance(idx, str):
-            idx_doc = [doc for doc in self.docs if doc.filename == idx]
-            if len(idx_doc)==1:
-                return idx_doc[0]
-            raise ValueError(f"{len(idx_doc)} returned for key {idx}")
-        raise NotImplementedError(f"No items for {idx}")
+        return self.database.docs[idx]
 
     def load_database(self, path: str | None) -> VectorDataset:
         """Load a vectorized corpus of documents."""

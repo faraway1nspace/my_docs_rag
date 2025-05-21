@@ -63,8 +63,16 @@ class VectorDataset:
     def __len__(self):
         return len(self.docs)
 
-    def __getitem__(self, idx):
-        return self.docs[idx]
+    def __getitem__(self, idx: Union[str, int]) -> DocVector:
+        """Get item key can be an int or filename."""
+        if isinstance(idx, int):
+            return self.docs[idx]
+        elif isinstance(idx, str):
+            idx_doc = [doc for doc in self.docs if doc.filename == idx]
+            if len(idx_doc)==1:
+                return idx_doc[0]
+            raise ValueError(f"{len(idx_doc)} returned for key {idx}")
+        raise NotImplementedError(f"No items for {idx}")
 
     def append(self, doc: DocVector):
         """Add a doc vector to the vector dataset"""

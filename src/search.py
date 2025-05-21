@@ -12,6 +12,16 @@ from src.vectors import DocVector
 
 logging.getLogger().setLevel(logging.INFO)
 
+
+import numpy as np
+
+def geomean(x:np.ndarry, epsilon=1e-7):
+    """Geometric mean with small constant for 0 elements."""
+    y = x*(x>0)+epsilon*(x<=0)
+    logy = np.log(y)
+    mean_log = np.mean(logy)
+    return np.exp(mean_log)
+
 class Search:
     """Wrapper for TFIDF and SBERT retrievers to search vectorized corpus by two methods."""
 
@@ -118,10 +128,54 @@ class Search:
         top_k_docs = self._filter_topk(docs_sorted, k, self.config.max_similarity)
         return [doc.text for doc in top_k_docs]
 
-    def search(self, query: str, k: int = 3, method: Literal['sparse','dense','both']="sparse") -> List[str]:
+    def _search_combined(self, query: str, k: int = 3) -> List[str]:
+        """Search the corpus using TFIDF and SBERT and return top k non-similar results."""
+        def combine_scores(x:float, y:float, eps:float=0.0001) -> float:
+            return (x+eps)*(y+eps)
+
+        docs_scored_1 = self.tfidf_corpus_processor.score(query, return_type='doc')
+        docs_scored_2 = self.sbert_corpus_processor.score(query, return_type='doc')
+
+        # ensure the names of the files are the same
+        assert [doc.filename for doc in docs_scored_1] == [doc.filename for doc in docs_scored_2], 'name mismatch in combined search'
+
+        # combine the scores (like geometric mean -- but because of ranking we don't really care)
+        scores_combined = {
+            doc1.filename:combine_scores(doc1.score,doc2.score) for doc1,doc2 in zip(docs_scored_1,docs_scored_2)
+        }
+
+        # sort filenamesdescending highest scores
+        filenames_sorted = sorted(scores_combined, key = lambda x: scores_combined[x],reverse=True)
+
+        top_k_results: List[str] = []
+        for candidate_filename in filenames_sorted:
+            if len(top_k_results) >= k:
+                break
+            is_redundant = False
+            for prev_f in top_k_results:
+                doc_a = self.tfidf_corpus_processor[candidate_filename] # sparse vector candidate
+                doc_b = self.sbert_corpus_processor[candidate_filename] # dense vector candidate
+                prev_doc_a = self.tfidf_corpus_processor[pref_f] # sparse vector previously selected
+                prev_doc_b = self.sbert_corpus_processor[pref_f] # dense vector previously selected
+                similarity_a = cosine_similarity([doc_a.vector], [prev_doc_a.vector])[0][0] # sparse similarity
+                similarity_b = cosine_similarity([doc_b.vector], [prev_doc_b.vector])[0][0] # dense similarity
+                if combine_scores(similarity_a,similarity_b) > combine_scores(max_similarity, max_similarity)
+                    is_redundant = True
+                    break
+            
+            if not is_redundant:
+                top_k_results.append(candidate_filename)
+
+        # return the documents
+        return [self.tfidf_corpus_processor[f].text for f in top_k_results]
+
+
+    def search(self, query: str, k: int = 3, method: Literal['sparse','dense','combined']="combined") -> List[str]:
         """Search the corpus using TFIDF and/or SBERT and return top k diverse non-similar results."""
         if method == 'sparse':
             return self._search_sparse(query, k)
         elif method == 'dense':
             return self._search_dense(query, k)
+        elif method == 'combined':
+            return self._search_combined(query, k)
         raise NotImplementedError(f"Method '{method}' not implemented yet.")
