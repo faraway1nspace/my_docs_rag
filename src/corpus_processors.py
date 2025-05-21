@@ -2,12 +2,13 @@ import os
 import pickle
 import hashlib
 import glob
-from typing import Dict, Tuple
+from typing import Dict, List, Literal, Tuple, Union
 
 import docx
 import PyPDF2
 
 import numpy as np
+import pandas as pd
 
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -157,7 +158,7 @@ class TFIDFCorpusProcessor(BaseCorpusProcessor):
             self, 
             query: str, 
             return_type: Literal['dict','list','pandas'] = 'dict'
-        ) -> Union[Dict[str, float], List[float], pd.Series]:
+    ) -> Union[List[DocVector], Dict[str, float], List[float], pd.Series]:
         """Calc cosine_similarity score for query-text across corpus-database."""
         query_vector = self.retriever.vectorize_query(query)
         return self.database.score(query_vector, return_type)     
@@ -183,7 +184,7 @@ class SBERTCorpusProcessor(BaseCorpusProcessor):
             self, 
             query: str, 
             return_type: Literal['dict','list','pandas'] = 'dict'
-        ) -> Union[Dict[str, float], List[float], pd.Series]:
+    ) -> Union[List[DocVector], Dict[str, float], List[float], pd.Series]:
         """Calc cosine_similarity score for query-text across corpus-database."""
         query_vector = self.retriever.vectorize_query(query)
         return self.database.score(query_vector, return_type)   

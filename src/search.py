@@ -9,7 +9,6 @@ from src.retriever import TFIDF, SBERT
 from src.train_tfidf import train_tfidf
 from src.vectors import DocVector
 
-
 logging.getLogger().setLevel(logging.INFO)
 
 class Search:

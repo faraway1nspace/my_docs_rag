@@ -2,7 +2,8 @@ import os
 import pickle
 
 import numpy as np
-import pandas as pd
+
+from pandas import Series as pd_Series
 from typing import Dict, List, Literal, Tuple, Union
 
 from sklearn.metrics.pairwise import cosine_similarity
@@ -77,7 +78,8 @@ class VectorDataset:
             self,
             query_vector: np.ndarray,
             return_type: Literal['doc','dict','list','pandas'] = 'dict'
-        ) -> Union[Dict[str, float], List[float], pd.Series]:
+    ) -> Union[List[DocVector], Dict[str, float], List[float], pd_Series]:
+        """Given a query vector, compute cosine similarity of docs."""
         # Combine all document vectors into a matrix
         m = self.array()
 
@@ -98,7 +100,7 @@ class VectorDataset:
         if return_type=='list':
             return list(scores.values())
         if return_type=='pandas':
-            return pd.Series(scores)
+            return pd_Series(scores)
         return scores
 
     def save(self, path:str):
