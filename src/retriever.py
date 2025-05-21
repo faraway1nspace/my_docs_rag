@@ -190,6 +190,12 @@ class SBERT:
     def load(cls, config:BertConfig = BertConfig()) -> 'SBERT':
         return cls(vectorizer = None, config=config)
 
+    @staticmethod
+    def clean(text: str) -> str:
+        """Retain only most common special characters."""
+        pattern= r"[^a-zA-Z0-9!@#$%&(){}\[\]\s\.\;\:\,\-\_\+\=\/\'\"]"
+        return re.sub(pattern, ' ', text)
+
     def vectorize(
             self, 
             texts: List[str],
@@ -205,7 +211,7 @@ class SBERT:
             batch_size = self.config.batch_size            
         
         # Prepend the prefix to each text if specified
-        texts_with_prefix = [prefix + text for text in texts]
+        texts_with_prefix = [prefix + self.clean(text) for text in texts]
         # Generate embeddings
         embeddings = self.vectorizer.encode(
             texts_with_prefix, 
@@ -222,7 +228,7 @@ class SBERT:
             prefix = self.config.prefix_query       
         
         # Prepend the prefix to each text if specified
-        texts_with_prefix = prefix + query
+        texts_with_prefix = prefix + self.clean(query)
         embeddings = self.vectorizer.encode(
             [texts_with_prefix], convert_to_tensor=True
         )
