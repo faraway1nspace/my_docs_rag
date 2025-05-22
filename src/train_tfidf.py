@@ -27,7 +27,7 @@ def train_tfidf(config: TrainingConfig = TrainingConfig()):
     )
 
     # test the tokenizer
-    logging.info(f"""Test tokenizer: {tokenizer.tokenize(TEST_STRING)}""")
+    logging.info(f"""=== Test tokenizer: {tokenizer.tokenize(TEST_STRING)} ===""")
 
     # instantiate TFIDF retriever for training
     tfidf = TFIDF(
@@ -75,7 +75,7 @@ def make_tfidf_training_set(config: TrainingConfig) -> Tuple[List[str],str]:
                 columns = ["title","text"] # defaults
                 logging.warning(f'No columns in .env datassets name: using default columns {columns}')
 
-            logging.info(f'Downloading HF dataset for training tokenizer {dataset_name}')
+            logging.info(f'=== Downloading HF dataset for training tokenizer {dataset_name} ===')
             data = load_dataset(dataset_name, split='train')
             for row in data:
                 # concatenate the title and text
@@ -89,7 +89,7 @@ def make_tfidf_training_set(config: TrainingConfig) -> Tuple[List[str],str]:
                 filecon.write(text_cleaned + "\n")
 
     # return for other processes, and the sentencepiece file
-    logging.info(f"Wrote SP training dataset to {config.sp.sp_train_file}")
+    logging.info(f"=== Wrote SP training dataset to {config.sp.sp_train_file} ===")
     return corpus, config.sp.sp_train_file 
     
             

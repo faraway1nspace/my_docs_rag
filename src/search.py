@@ -31,6 +31,7 @@ class Search:
         assert 'sbert_corpus_processor' in self.__dict__, "SBERT corpus processor not initialized"
         assert len(self.tfidf_corpus_processor.database)>0, "TFIDF corpus processor has no documents"
         assert len(self.sbert_corpus_processor.database)>0, "SBERT corpus processor has no documents"
+        logging.info("=== Initialized Search API ===")
 
     def _initialize_retrievers(self) -> None:
         """Sets up the TFIDF and sBERT retrievers."""
@@ -126,15 +127,15 @@ class Search:
         def combine_scores(x:float, y:float, eps:float=0.0001) -> float:
             return (x+eps)*(y+eps)
 
-        docs_scored_1 = self.tfidf_corpus_processor.score(query, return_type='doc')
-        docs_scored_2 = self.sbert_corpus_processor.score(query, return_type='doc')
+        docs_scored_1 = self.tfidf_corpus_processor.score(query, return_type='doc') # sparse doc vectors
+        docs_scored_2 = self.sbert_corpus_processor.score(query, return_type='doc') # dense doc vectors
 
-        # ensure the names of the files are the same
+        # ensure the names of the files are the same between sparse & dense vectors
         assert [doc.filename for doc in docs_scored_1] == [doc.filename for doc in docs_scored_2], 'name mismatch in combined search'
 
         # combine the scores (like geometric mean -- but because of ranking we don't really care)
         scores_combined = {
-            doc1.filename:combine_scores(doc1.score,doc2.score) 
+            doc1.filename:combine_scores(doc1.score,doc2.score)
             for doc1,doc2 in zip(docs_scored_1,docs_scored_2)
         }
 
@@ -158,7 +159,7 @@ class Search:
                 if combine_scores(similarity_a,similarity_b) > combine_scores(*[self.config.max_similarity]*2):
                     is_redundant = True
                     break
-            
+
             if not is_redundant:
                 top_k_results.append(candidate_filenm) # add candidate to top results to return
 
