@@ -77,7 +77,10 @@ class BaseCorpusProcessor:
     def extract_text_from_docx(self, filepath: str) -> str:
         """Extract text from a DOCX file."""
         doc = docx.Document(filepath)
-        return '\n'.join([para.text for para in doc.paragraphs])
+        doc_text = '\n'.join([para.text for para in doc.paragraphs])
+        if not doc_text.strip():
+            return ""
+        return doc_text
 
     def extract_text_from_pdf(self, filepath: str) -> str:
         """Extract text from a PDF file."""
@@ -118,15 +121,18 @@ class BaseCorpusProcessor:
             if filename not in files_in_corpus:
                 logging.info(f"Extract text from new file: {filepath}")
                 text = self.extract_text(filepath)
-                self.database.append(
-                    DocVector(
-                        filename=filename,
-                        vector=None,
-                        path=filepath,
-                        text=text
+                if text:
+                    self.database.append(
+                        DocVector(
+                            filename=filename,
+                            vector=None,
+                            path=filepath,
+                            text=text
+                        )
                     )
-                )
-                found_new_paths.append(filepath)
+                    found_new_paths.append(filepath)
+                else:
+                    logging.warning(f"!!! No text extracted from {filepath}")
 
         if found_new_paths:
             logging.info(f"Extracted text from {len(found_new_paths)} new files: {found_new_paths}")

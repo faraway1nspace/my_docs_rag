@@ -125,7 +125,10 @@ class Search:
     def _search_combined(self, query: str, k: int = 3) -> List[str]:
         """Search the corpus using TFIDF and SBERT and return top k non-similar results."""
         def combine_scores(x:float, y:float, eps:float=0.0001) -> float:
-            return (x+eps)*(y+eps)
+            """Harmonic mean"""
+            x+=eps
+            y+=eps
+            return 2*x*y / (x+y)
 
         docs_scored_1 = self.tfidf_corpus_processor.score(query, return_type='doc') # sparse doc vectors
         docs_scored_2 = self.sbert_corpus_processor.score(query, return_type='doc') # dense doc vectors
