@@ -1,23 +1,27 @@
-import os
-import pickle
-import hashlib
-import glob
-from typing import Dict, List, Literal, Tuple, Union
 
+import hashlib
 import docx
+import glob
+
+import logging
+import numpy as np
+import os
+import pandas as pd
+import pickle
 import PyPDF2
 
-import numpy as np
-import pandas as pd
-
 from sklearn.metrics.pairwise import cosine_similarity
+from typing import Dict, List, Literal, Tuple, Union
+
 
 from src.retriever import TFIDF, SBERT
 from src.config import TrainingConfig, RunConfig
 from src.vectors import DocVector, VectorDataset
 
+logging.getLogger().setLevel(logging.INFO)
 
 class BaseCorpusProcessor:
+    """Preprocesses local files, extract texts, and vectorize for search."""
     def __init__(self, database_path: str | None = None, run_config: RunConfig = RunConfig()):      
         self.run_config = run_config
         if database_path is None:
@@ -32,7 +36,7 @@ class BaseCorpusProcessor:
 
     def __getitem__(self, idx: Union[str, int]) -> DocVector:
         """Get item key can be an int or filename."""
-        return self.database.docs[idx]
+        return self.database[idx]
 
     def load_database(self, path: str | None) -> VectorDataset:
         """Load a vectorized corpus of documents."""
@@ -42,7 +46,7 @@ class BaseCorpusProcessor:
             vector_database = VectorDataset.load(path)
             print(f"Loaded {path} vector database with {len(vector_database)} documents.")
             return vector_database
-        print(f'Empty dataset: no file existing {path}')
+        logging.info(f'Empty dataset: no file existing {path}')
         return VectorDataset(docs=[])
 
     def save_database(self, path: str | None = None):
@@ -50,6 +54,7 @@ class BaseCorpusProcessor:
         if path is None:
             path = self.database_path        
         self.database.save(path)
+        logging.info(f"=== saved vector database {path} ==")
 
     def hash_file(self, filepath: str) -> str:
         """Generate a hash for a file based on its content."""
@@ -104,14 +109,14 @@ class BaseCorpusProcessor:
         """Extract text from a file, supporting docx, pdf, and txt formats."""
         if docs_path is None:
             docs_path = self.run_config.docs_path
-        files_to_load = glob.glob(os.path.join(docs_path, "*"))
+        files_to_load = sorted(glob.glob(os.path.join(docs_path, "*")))
         found_new_paths:List[str] = [] # new files
         files_in_corpus = self.database.filenames # files already in corpus
         for filepath in files_to_load:
             filename = filepath.split('/')[-1]
             # only extract text from new files
             if filename not in files_in_corpus:
-                print(f"Extract text from new file: {filepath}")
+                logging.info(f"Extract text from new file: {filepath}")
                 text = self.extract_text(filepath)
                 self.database.append(
                     DocVector(
@@ -124,7 +129,7 @@ class BaseCorpusProcessor:
                 found_new_paths.append(filepath)
 
         if found_new_paths:
-            print(f"Extracted text from {len(found_new_paths)} new files: {found_new_paths}")
+            logging.info(f"Extracted text from {len(found_new_paths)} new files: {found_new_paths}")
 
             # for new docs, get their text that require embedding
             text_to_embed, indices_to_embed = self.database.text_to_embed
@@ -139,7 +144,7 @@ class BaseCorpusProcessor:
             self.save_database()
             
         else:
-            print("No new files to vectorize.")   
+            logging.info("No new files to vectorize.")   
 
 
 

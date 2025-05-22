@@ -1,8 +1,8 @@
+import logging
+import numpy as np
 import os
 import pickle
 import re
-
-import numpy as np
 import sentencepiece as spm
 
 from pydantic import BaseModel
@@ -12,6 +12,7 @@ from typing import List, Dict
 
 from src.config import BertConfig, TFIDFConfig, TrainingConfig, SentencePieceConfig
 
+logging.getLogger().setLevel(logging.INFO)
 
 class SentencePieceTokenizer:
     """Tokenizes text by BPE for TFIDF."""
@@ -22,6 +23,7 @@ class SentencePieceTokenizer:
             self.model_path = model_path
             self.sp = spm.SentencePieceProcessor()
             self.sp.load(model_path)
+            logging.info(f"=== Reloaded sentence piece tokenizer {model_path}===")
 
     def tokenize(self, text: str) -> List[str]:
         return self.sp.encode_as_pieces(self._preprocess(text))
@@ -54,6 +56,7 @@ class SentencePieceTokenizer:
             character_coverage=config.character_coverage,
             model_type='bpe'
         )
+        logging.info(f"=== Trained the sentence piece tokenizer===")
 
         # reload the sp model as a tokenizer
         tokenizer = cls.load(config=config)    
@@ -136,7 +139,9 @@ class TFIDF:
         doc_strings = [' '.join(tokens) for tokens in docs_tokenized]
 
         # train the tfidf vectorizer
+        logging.info("=== Begin training TFIDF vectorizer===")
         self.vectorizer.fit(doc_strings)
+        logging.info("=== Done training TFIDF vectorizer===")
 
     def save(self, vectorizer_path: str|None=None):
         if vectorizer_path is None:
@@ -156,6 +161,8 @@ class TFIDF:
         # reload the tfidf vectorizer
         with open(vectorizer_path, 'rb') as f:
             vectorizer = pickle.load(f)
+
+        logging.info(f"=== Reloaded TFIDF vectorizer {vectorizer_path}===")
         
         return cls(
             vectorizer=vectorizer, 
