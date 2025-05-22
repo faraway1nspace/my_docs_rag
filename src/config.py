@@ -36,7 +36,7 @@ class TFIDFConfig(BaseModel):
     model_path: str = f"{PATH_TFIDF}/tfidf_model.pkl"
     ngram_range: Tuple[int,int] = (1, 2)
     max_df: float | int = 0.9 
-    min_df: float | int = 0.005 
+    min_df: float | int = 0.005
     max_features: int | None = VOCAB_SIZE 
     norm: Literal["l1", "l2", None] = "l2"
     use_idf: bool = True

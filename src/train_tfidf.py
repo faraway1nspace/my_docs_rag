@@ -1,11 +1,16 @@
+import logging
 import os
 import pickle
+import re
 from datasets import load_dataset
 
 from typing import List, Tuple
 
 from src.config import SentencePieceConfig, TrainingConfig
 from src.retriever import SentencePieceTokenizer, TFIDF
+
+logging.getLogger().setLevel(logging.INFO)
+
 
 TEST_STRING = "The ideal candidate will have a background in business, tax, and legal contracts."
 
@@ -22,7 +27,7 @@ def train_tfidf(config: TrainingConfig = TrainingConfig()):
     )
 
     # test the tokenizer
-    print(tokenizer.tokenize(TEST_STRING))
+    logging.info(f"""Test tokenizer: {tokenizer.tokenize(TEST_STRING)}""")
 
     # instantiate TFIDF retriever for training
     tfidf = TFIDF(
@@ -44,36 +49,47 @@ def train_tfidf(config: TrainingConfig = TrainingConfig()):
     assert diff.sum() < 0.00000001
 
     # demo the retrieval
-    print('Done training the TFIDF and tokenizer.')
+    logging.info('=== Passed test: training and reloading TFIDF plus tokenizer.===')
 
 
 def make_tfidf_training_set(config: TrainingConfig) -> Tuple[List[str],str]:
     """Downloads a HF dataset and saves text to a SentencePiece dataset"""
-    
-    data = load_dataset(config.dataset_name)
-
     # preprocessing
     preproces = SentencePieceTokenizer()._preprocess
 
     # corpus to return
     corpus:List[str] = []
 
-    # convert the HF dataset into a text file for sentencepiece
     with open(config.sp.sp_train_file, 'w') as filecon:
 
-        for title, text in zip(data.data['train']['title'], data.data['train']['description']):
+        for dataset_pointer in config.dataset_name.split(" "):
+            
+            # process pointer to get column names and the dataset_name
+            columns = re.search(r"\{.*?\}",dataset_pointer)
+            if columns:
+                coltext = columns.group()
+                columns = coltext[1:-1].split(",")
+                dataset_name = dataset_pointer.replace(coltext,"")
+            else:
+                dataset_name = dataset_pointer
+                columns = ["title","text"] # defaults
+                logging.warning(f'No columns in .env datassets name: using default columns {columns}')
 
-            # concatenate the title and text
-            doc_text = str(title) + " " + str(text)
-            corpus.append(doc_text)
+            logging.info(f'Downloading HF dataset for training tokenizer {dataset_name}')
+            data = load_dataset(dataset_name, split='train')
+            for row in data:
+                # concatenate the title and text
+                doc_text = " ".join([str(row[column]) for column in columns])
+                corpus.append(doc_text)
 
-            # preprocess the text for sentencepiece
-            text_cleaned = preproces(doc_text)
+                # preprocess the text for sentencepiece
+                text_cleaned = preproces(doc_text)
 
-            # write to file for sentencepiece training
-            filecon.write(text_cleaned + "\n")
+                # write to file for sentencepiece training
+                filecon.write(text_cleaned + "\n")
 
     # return for other processes, and the sentencepiece file
+    logging.info(f"Wrote SP training dataset to {config.sp.sp_train_file}")
     return corpus, config.sp.sp_train_file 
     
             
