@@ -124,12 +124,10 @@ class BaseCorpusProcessor:
     ) -> None:
         """Wrapper for submethods. Vectorizes the inputs.
 
-        Can be local files, list of text, or directory. 
-        We check if it's a directory and vectorize all 
-        files in the directory. If it's a list of str, we check if they
-        are a list of files, and vectorize the files. If a list of strings
-        that are not a file, we just vectorize as doc-text.
-        
+        Can be local files, list of text, or directory. We check if it's 
+        a directory and vectorize all files in the directory. If it's a 
+        list of str, we check if they are a list of files, and vectorize
+        the files. If list of doc-texts, we just vectorize.
         
         Arguments:
             input: either directory, list of file paths, or list of text
@@ -137,6 +135,7 @@ class BaseCorpusProcessor:
         """
         if input is None:
             # vectorize the corpus according to self.config directory of files
+            logging.info(f"=== vectorizing directory {self.run_config.docs_path} ===")
             self._vectorize_directory(
                 directory=self.run_config.docs_path, do_save=do_save
             )
@@ -144,16 +143,19 @@ class BaseCorpusProcessor:
         
         if (isinstance(input, str) or isinstance(input, Path)) and os.path.isdir(input):
             # vectorize the corpus in directory as specified by Input
+            logging.info(f"=== vectorizing directory {input} ===")
             self._vectorize_directory(directory=input, do_save=do_save)
             return
 
         if isinstance(input, list):
             if all([os.path.isfile(x) for x in input]):
                 # inputs are paths to files
-                self._vectorize_files(doc_paths=input, do_save=do_save) 
+                logging.info(f"=== vectorizing files {input} ===")
+                self._vectorize_files(docs_paths=input, do_save=do_save) 
                 return
             
             elif all([isinstance(x,str) for x in input]):
+                logging.info("=== vectorizing texts ===")
                 self._vectorize_texts(texts=input, do_save=False)
                 return
         

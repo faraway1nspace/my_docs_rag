@@ -104,7 +104,9 @@ class Search:
                 path_database="", 
                 run_config=self.config
             )
-        processor._vectorize_texts(texts)
+        else:
+            raise NotImplementedError(f"_initialize_database_from_texts no method: {method}")
+        processor.vectorize_corpus(texts)
         logging.info(f"Created on the fly vector-corpus with {len(processor)} docs")            
         return processor         
 
@@ -129,7 +131,7 @@ class Search:
     def _search_sparse(self, query: str, k: int = 3, corpus: Optional[List[str]]=[]) -> List[str]:
         """Search the corpus using TFIDF and return top k non-similar results."""
         if not corpus:
-            logging.info("=== combined search using attached databases === ")
+            logging.info("=== sparse search using attached databases === ")
             processor = self.tfidf_corpus_processor
         else:
             logging.info("=== making vector databases on the fly === ")
@@ -144,7 +146,7 @@ class Search:
     def _search_dense(self, query: str, k: int = 3, corpus: Optional[List[str]]=[]) -> List[str]:
         """Search the corpus using SBERT and return top k non-similar results."""
         if not corpus:
-            logging.info("=== combined search using attached databases === ")
+            logging.info("=== dense search using attached databases === ")
             processor = self.tfidf_corpus_processor
         else:
             logging.info("=== making vector databases on the fly === ")
