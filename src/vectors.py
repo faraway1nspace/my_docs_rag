@@ -98,7 +98,7 @@ class VectorDataset:
         for doc, score in zip(self.docs, similarities):
             doc.score = score
         
-        if return_type=="doc":
+        if return_type in ["doc","docs"]:
             return self.docs
         
         # for other return types, collect scores as dictionary, then convert

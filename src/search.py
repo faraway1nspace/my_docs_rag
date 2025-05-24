@@ -16,7 +16,7 @@ logging.getLogger().setLevel(logging.INFO)
 
 
 class Search:
-    """Wrapper for TFIDF and SBERT retrievers to search vectorized corpus by two methods."""
+    """Wrapper for TFIDF and SBERT retrievers to search vectorized corpus by three methods."""
 
     def __init__(self, config: RunConfig = RunConfig()):
         self.config = config
@@ -89,21 +89,23 @@ class Search:
             logging.info("=== Done getting SBERT vectors from local documents.===")
 
     def _initialize_database_from_texts(
-            texts:List[str], method: Literal["sparse","dense"]
+            self, texts:List[str], method: Literal["sparse","dense"]
         )->Union[TFIDFCorpusProcessor, SBERTCorpusProcessor]:
         """Creates a vector database on the fly from input texts."""
         if method == "sparse":
             processor = TFIDFCorpusProcessor(
-                retriever=tfidf_corpus_processor.retriever, 
+                retriever=self.tfidf_corpus_processor.retriever, 
                 path_database="", 
                 run_config=self.config
             )
         elif method == "dense":
             processor = SBERTCorpusProcessor(
-                retriever=sbert_corpus_processor.retriever, 
+                retriever=self.sbert_corpus_processor.retriever, 
                 path_database="", 
                 run_config=self.config
-            )   
+            )
+        processor._vectorize_texts(texts)
+        logging.info(f"Created on the fly vector-corpus with {len(processor)} docs")            
         return processor         
 
     def _filter_topk(self, sorted_docs: List[DocVector], k: int = 3, max_similarity: float = 0.95) -> List[DocVector]:
@@ -127,11 +129,11 @@ class Search:
     def _search_sparse(self, query: str, k: int = 3, corpus: Optional[List[str]]=[]) -> List[str]:
         """Search the corpus using TFIDF and return top k non-similar results."""
         if not corpus:
-            # use attached database
+            logging.info("=== combined search using attached databases === ")
             processor = self.tfidf_corpus_processor
         else:
-            # make database on the fly
-            processor = self._initialize_database_from_texts(corpus)
+            logging.info("=== making vector databases on the fly === ")
+            processor = self._initialize_database_from_texts(corpus, method="sparse")
         
         docs_scored = processor.score(query, return_type='doc')
         docs_sorted = sorted(docs_scored, key = lambda x: x.score, reverse=True)
@@ -142,11 +144,11 @@ class Search:
     def _search_dense(self, query: str, k: int = 3, corpus: Optional[List[str]]=[]) -> List[str]:
         """Search the corpus using SBERT and return top k non-similar results."""
         if not corpus:
-            # use attached database
+            logging.info("=== combined search using attached databases === ")
             processor = self.tfidf_corpus_processor
         else:
-            # make database on the fly
-            processor = self._initialize_database_from_texts(corpus)
+            logging.info("=== making vector databases on the fly === ")
+            processor = self._initialize_database_from_texts(corpus, method="dense")
                 
         docs_scored = processor.score(query, return_type='doc')
         docs_sorted = sorted(docs_scored, key = lambda x: x.score, reverse=True)
@@ -163,13 +165,13 @@ class Search:
             return 2*x*y / (x+y)
         
         if not corpus:
-            # use attached databases
+            logging.info("=== combined search using attached databases === ")
             tfidf_corpus_processor = self.tfidf_corpus_processor
             sbert_corpus_processor = self.sbert_corpus_processor
         else:
-            # make vector databases on the fly
-            tfidf_corpus_processor = self._initialize_database_from_texts(corpus)
-            sbert_corpus_processor = self._initialize_database_from_texts(corpus)          
+            logging.info("=== making vector databases on the fly === ")
+            tfidf_corpus_processor = self._initialize_database_from_texts(corpus, method="sparse")
+            sbert_corpus_processor = self._initialize_database_from_texts(corpus, method="dense")          
 
         docs_scored_1 = tfidf_corpus_processor.score(query, return_type='doc') # sparse doc vectors
         docs_scored_2 = sbert_corpus_processor.score(query, return_type='doc') # dense doc vectors
