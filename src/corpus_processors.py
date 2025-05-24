@@ -12,7 +12,7 @@ import PyPDF2
 
 from sklearn.metrics.pairwise import cosine_similarity
 from typing import Dict, List, Literal, Tuple, Union
-
+from pathlib import Path
 
 from src.retriever import TFIDF, SBERT
 from src.config import TrainingConfig, RunConfig
@@ -22,14 +22,23 @@ logging.getLogger().setLevel(logging.INFO)
 
 class BaseCorpusProcessor:
     """Preprocesses local files, extract texts, and vectorize for search."""
-    def __init__(self, database_path: str | None = None, run_config: RunConfig = RunConfig()):      
+    def __init__(
+        self, 
+        database_path: str | None = None, 
+        run_config: RunConfig = RunConfig(),
+        do_reload:bool = True
+    ):      
         self.run_config = run_config
         if database_path is None:
             database_path = self.run_config.path_databases
         
         self.database_path = database_path
-        # load the vector dataset
-        self.database: VectorDataset = self.load_database(database_path)
+        if do_reload:
+            # reload the vector dataset
+            self.database: VectorDataset = self.load_database(database_path)
+        else:
+            # instantiate an empty vector database
+            self.database: VectorDataset = self.load_database("")
 
     def __len__(self) -> int:
         return len(self.database.docs)
@@ -108,11 +117,85 @@ class BaseCorpusProcessor:
         """Calc cosine_similarity score for query-text across corpus-database."""
         raise NotImplementedError("Subclasses must implement this method.")
 
-    def vectorize_corpus(self, docs_path: str | None = None, do_save:bool = True):
+    def vectorize_corpus(
+        self, 
+        input: Union[str, Path, List[str], None] = None, 
+        do_save:bool = True
+    ) -> None:
+        """Vectorizes the inputs, which can be local files or a list of text."""
+        if input is None:
+            # vectorize the corpus according to self.config directory of files
+            self._vectorize_directory(
+                directory=self.run_config.docs_path, do_save=do_save
+            )
+            return
+        
+        if (isinstance(input, str) or isinstance(input, Path)) and os.path.isdir(input):
+            # vectorize the corpus in directory as specified by Input
+            self._vectorize_directory(directory=input, do_save=do_save)
+            return
+
+        if isinstance(input, list):
+            if all([os.path.isfile(x) for x in input]):
+                # inputs are paths to files
+                self._vectorize_files(doc_paths=input, do_save=do_save) 
+                return
+            
+            elif all([isinstance(x,str) for x in input]):
+                self._vectorize_texts(texts=input, do_save=False)
+                return
+        
+        raise NotImplementedError(
+            (
+                f"No method for input type {type(input)}."
+                " Check whether files exist, directory exists "
+                " or pass in a list of document-texts"
+            )
+        )
+
+    def _vectorize_directory(self, directory: str | None = None, do_save:bool = True):
         """Extract text from a file, supporting docx, pdf, and txt formats."""
-        if docs_path is None:
-            docs_path = self.run_config.docs_path
-        files_to_load = sorted(glob.glob(os.path.join(docs_path, "*")))
+        if directory is None:
+            directory = self.run_config.docs_path
+        files_to_load = sorted(glob.glob(os.path.join(directory, "*")))
+        files_to_load = [
+            f for f in files_to_load
+            if (
+                f.lower().endswith(".pdf") or
+                f.lower().endswith(".docx") or
+                f.lower().endswith(".txt")
+            )
+        ]
+        if not files_to_load:
+            raise NotImplementedError(f"{directory} has no files of type pdf, docx, txt")
+        logging.info(f"Grabbed files in directory {directory}")
+        self._vectorize_files(docs_paths = files_to_load)
+
+    def _vectorize_texts(self, texts: List[str], do_save:bool = True):
+        """Extract text from a file, supporting docx, pdf, and txt formats."""
+        for i,text in enumerate(texts):
+            # filename acts as doc id
+            filename_fake = "file_{i}.txt"
+            self.database.append(
+                DocVector(
+                    filename=filename_fake,
+                    vector=None, # will be given vector below
+                    path="",
+                    text=text
+                )
+            )
+        text_to_embed, indices_to_embed = self.database.text_to_embed
+        # embed new text (child method)
+        embeddings = self.embed_texts(text_to_embed)
+        # insert embeddings into docs
+        self.database.insert_embeddings(embeddings, indices_to_embed) 
+        if do_save and self.database_path:
+            self.save_database()    
+        logging.info(f"Added {len(texts)} to database on-the-fly from inputs texts")   
+
+    def _vectorize_files(self, docs_paths: List[Union[str,Path]], do_save:bool = True):
+        """Extract text from a file, supporting docx, pdf, and txt formats."""
+        files_to_load = sorted(docs_paths)
         found_new_paths:List[str] = [] # new files
         files_in_corpus = self.database.filenames # files already in corpus
         for filepath in files_to_load:
@@ -125,7 +208,7 @@ class BaseCorpusProcessor:
                     self.database.append(
                         DocVector(
                             filename=filename,
-                            vector=None,
+                            vector=None, # will be given vector below
                             path=filepath,
                             text=text
                         )
@@ -147,12 +230,11 @@ class BaseCorpusProcessor:
             self.database.insert_embeddings(embeddings, indices_to_embed)
 
             # pickle the database
-            if do_save:
+            if do_save and self.database_path:
                 self.save_database()
             
         else:
-            logging.info("No new files to vectorize.")   
-
+            logging.info("No new files to vectorize.")               
 
 
 class TFIDFCorpusProcessor(BaseCorpusProcessor):
@@ -162,7 +244,8 @@ class TFIDFCorpusProcessor(BaseCorpusProcessor):
             self, 
             retriever: TFIDF, 
             path_database: str,
-            run_config: RunConfig = RunConfig()
+            run_config: RunConfig = RunConfig(),
+            do_reload: bool = True
         ):
         super().__init__(database_path=path_database, run_config=run_config)
         self.retriever = retriever
@@ -188,7 +271,8 @@ class SBERTCorpusProcessor(BaseCorpusProcessor):
             self, 
             retriever: SBERT, 
             path_database: str,
-            run_config: RunConfig = RunConfig()
+            run_config: RunConfig = RunConfig(),
+            do_reload: bool = True
         ):
         super().__init__(database_path=path_database, run_config=run_config)
         self.retriever = retriever  

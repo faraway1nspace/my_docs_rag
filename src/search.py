@@ -1,7 +1,7 @@
-## Search class
+"""Main interface to do retrieval on local (pickled) vector database."""
+
 import os
 import logging
-import numpy as np
 
 from typing import List, Literal
 from sklearn.metrics.pairwise import cosine_similarity
