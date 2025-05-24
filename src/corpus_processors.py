@@ -122,7 +122,19 @@ class BaseCorpusProcessor:
         input: Union[str, Path, List[str], None] = None, 
         do_save:bool = True
     ) -> None:
-        """Vectorizes the inputs, which can be local files or a list of text."""
+        """Wrapper for submethods. Vectorizes the inputs.
+
+        Can be local files, list of text, or directory. 
+        We check if it's a directory and vectorize all 
+        files in the directory. If it's a list of str, we check if they
+        are a list of files, and vectorize the files. If a list of strings
+        that are not a file, we just vectorize as doc-text.
+        
+        
+        Arguments:
+            input: either directory, list of file paths, or list of text
+            do_save: whether to pickle-save the created database locally
+        """
         if input is None:
             # vectorize the corpus according to self.config directory of files
             self._vectorize_directory(
@@ -175,7 +187,7 @@ class BaseCorpusProcessor:
         """Extract text from a file, supporting docx, pdf, and txt formats."""
         for i,text in enumerate(texts):
             # filename acts as doc id
-            filename_fake = "file_{i}.txt"
+            filename_fake = f"file_{i}.txt"
             self.database.append(
                 DocVector(
                     filename=filename_fake,

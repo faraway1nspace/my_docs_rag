@@ -3,7 +3,7 @@
 import os
 import logging
 
-from typing import List, Literal
+from typing import List, Literal, Optional, Union
 from sklearn.metrics.pairwise import cosine_similarity
 
 from src.config import RunConfig
@@ -25,7 +25,7 @@ class Search:
         self._initialize_retrievers()
 
         # initialize the document vectors for search
-        self._initialize_document_database()
+        self._initialize_local_database()
 
         assert 'tfidf_corpus_processor' in self.__dict__, "TFIDF corpus processor not initialized"
         assert 'sbert_corpus_processor' in self.__dict__, "SBERT corpus processor not initialized"
@@ -69,7 +69,7 @@ class Search:
             )
             logging.info("=== Loaded SBERT corpus procesor")
 
-    def _initialize_document_database(self) -> None:
+    def _initialize_local_database(self) -> None:
         """Vectorizes the local documents (reloading from cache if possible)"""
         if self.config.tfidf.do_tfidf:
             try:
@@ -87,6 +87,24 @@ class Search:
                 self._initialize_retrievers()
             self.sbert_corpus_processor.vectorize_corpus()
             logging.info("=== Done getting SBERT vectors from local documents.===")
+
+    def _initialize_database_from_texts(
+            texts:List[str], method: Literal["sparse","dense"]
+        )->Union[TFIDFCorpusProcessor, SBERTCorpusProcessor]:
+        """Creates a vector database on the fly from input texts."""
+        if method == "sparse":
+            processor = TFIDFCorpusProcessor(
+                retriever=tfidf_corpus_processor.retriever, 
+                path_database="", 
+                run_config=self.config
+            )
+        elif method == "dense":
+            processor = SBERTCorpusProcessor(
+                retriever=sbert_corpus_processor.retriever, 
+                path_database="", 
+                run_config=self.config
+            )   
+        return processor         
 
     def _filter_topk(self, sorted_docs: List[DocVector], k: int = 3, max_similarity: float = 0.95) -> List[DocVector]:
         """Filter out redundant results based on cosine similarity thresholds."""
@@ -106,32 +124,55 @@ class Search:
                 top_k_results.append(candidate_doc)
         return top_k_results
 
-    def _search_sparse(self, query: str, k: int = 3) -> List[str]:
+    def _search_sparse(self, query: str, k: int = 3, corpus: Optional[List[str]]=[]) -> List[str]:
         """Search the corpus using TFIDF and return top k non-similar results."""
-        docs_scored = self.tfidf_corpus_processor.score(query, return_type='doc')
+        if not corpus:
+            # use attached database
+            processor = self.tfidf_corpus_processor
+        else:
+            # make database on the fly
+            processor = self._initialize_database_from_texts(corpus)
+        
+        docs_scored = processor.score(query, return_type='doc')
         docs_sorted = sorted(docs_scored, key = lambda x: x.score, reverse=True)
         # get top k docs and ensure they are not too similar
         top_k_docs = self._filter_topk(docs_sorted, k, self.config.max_similarity)
         return [doc.text for doc in top_k_docs]
 
-    def _search_dense(self, query: str, k: int = 3) -> List[str]:
+    def _search_dense(self, query: str, k: int = 3, corpus: Optional[List[str]]=[]) -> List[str]:
         """Search the corpus using SBERT and return top k non-similar results."""
-        docs_scored = self.sbert_corpus_processor.score(query, return_type='doc')
+        if not corpus:
+            # use attached database
+            processor = self.tfidf_corpus_processor
+        else:
+            # make database on the fly
+            processor = self._initialize_database_from_texts(corpus)
+                
+        docs_scored = processor.score(query, return_type='doc')
         docs_sorted = sorted(docs_scored, key = lambda x: x.score, reverse=True)
         # get top k docs and ensure they are not too similar
         top_k_docs = self._filter_topk(docs_sorted, k, self.config.max_similarity)
         return [doc.text for doc in top_k_docs]
 
-    def _search_combined(self, query: str, k: int = 3) -> List[str]:
+    def _search_combined(self, query: str, k: int = 3, corpus: Optional[List[str]]=[]) -> List[str]:
         """Search the corpus using TFIDF and SBERT and return top k non-similar results."""
         def combine_scores(x:float, y:float, eps:float=0.0001) -> float:
             """Harmonic mean"""
             x+=eps
             y+=eps
             return 2*x*y / (x+y)
+        
+        if not corpus:
+            # use attached databases
+            tfidf_corpus_processor = self.tfidf_corpus_processor
+            sbert_corpus_processor = self.sbert_corpus_processor
+        else:
+            # make vector databases on the fly
+            tfidf_corpus_processor = self._initialize_database_from_texts(corpus)
+            sbert_corpus_processor = self._initialize_database_from_texts(corpus)          
 
-        docs_scored_1 = self.tfidf_corpus_processor.score(query, return_type='doc') # sparse doc vectors
-        docs_scored_2 = self.sbert_corpus_processor.score(query, return_type='doc') # dense doc vectors
+        docs_scored_1 = tfidf_corpus_processor.score(query, return_type='doc') # sparse doc vectors
+        docs_scored_2 = sbert_corpus_processor.score(query, return_type='doc') # dense doc vectors
 
         # ensure the names of the files are the same between sparse & dense vectors
         assert [doc.filename for doc in docs_scored_1] == [doc.filename for doc in docs_scored_2], 'name mismatch in combined search'
@@ -152,10 +193,10 @@ class Search:
                 break
             is_redundant = False
             for prev_filenm in top_k_results:
-                doc_a = self.tfidf_corpus_processor[candidate_filenm] # sparse vector candidate
-                doc_b = self.sbert_corpus_processor[candidate_filenm] # dense vector candidate
-                prev_doc_a = self.tfidf_corpus_processor[prev_filenm] # sparse vector previously selected
-                prev_doc_b = self.sbert_corpus_processor[prev_filenm] # dense vector previously selected
+                doc_a = tfidf_corpus_processor[candidate_filenm] # sparse vector candidate
+                doc_b = sbert_corpus_processor[candidate_filenm] # dense vector candidate
+                prev_doc_a = tfidf_corpus_processor[prev_filenm] # sparse vector previously selected
+                prev_doc_b = sbert_corpus_processor[prev_filenm] # dense vector previously selected
                 similarity_a = cosine_similarity([doc_a.vector], [prev_doc_a.vector])[0][0] # sparse similarity
                 similarity_b = cosine_similarity([doc_b.vector], [prev_doc_b.vector])[0][0] # dense similarity
                 # threshold is max_similarity squared...
@@ -167,15 +208,30 @@ class Search:
                 top_k_results.append(candidate_filenm) # add candidate to top results to return
 
         # return the documents
-        return [self.tfidf_corpus_processor[filename].text for filename in top_k_results]
+        return [tfidf_corpus_processor[filename].text for filename in top_k_results]
 
 
-    def search(self, query: str, k: int = 3, method: Literal['sparse','dense','combined']="combined") -> List[str]:
-        """Search the corpus using TFIDF and/or SBERT and return top k diverse non-similar results."""
+    def search(
+            self, 
+            query: str, 
+            k: int = 3, 
+            method: Literal['sparse','dense','combined']="combined",
+            corpus: Optional[List[str]]=[]
+        ) -> List[str]:
+        """Search the corpus using TFIDF and/or SBERT and return top k diverse non-similar results.
+        
+        Arguments:
+            query: str, the query to used to search the corpus
+            k: int, number of results to retrieve from corpus
+            method: sparse==TFIDF, dense==sBERT, and combined
+            corpus: optionally, we can vectorze text on the fly
+                and create a new database, otherwise, use the local
+                database that is attached and already vectorized.
+        """
         if method == 'sparse':
-            return self._search_sparse(query, k)
+            return self._search_sparse(query, k, corpus)
         elif method == 'dense':
-            return self._search_dense(query, k)
+            return self._search_dense(query, k, corpus)
         elif method == 'combined':
-            return self._search_combined(query, k)
+            return self._search_combined(query, k, corpus)
         raise NotImplementedError(f"Method '{method}' not implemented yet.")
