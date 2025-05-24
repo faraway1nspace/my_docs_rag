@@ -108,7 +108,7 @@ class BaseCorpusProcessor:
         """Calc cosine_similarity score for query-text across corpus-database."""
         raise NotImplementedError("Subclasses must implement this method.")
 
-    def vectorize_corpus(self, docs_path: str | None = None):
+    def vectorize_corpus(self, docs_path: str | None = None, do_save:bool = True):
         """Extract text from a file, supporting docx, pdf, and txt formats."""
         if docs_path is None:
             docs_path = self.run_config.docs_path
@@ -147,7 +147,8 @@ class BaseCorpusProcessor:
             self.database.insert_embeddings(embeddings, indices_to_embed)
 
             # pickle the database
-            self.save_database()
+            if do_save:
+                self.save_database()
             
         else:
             logging.info("No new files to vectorize.")   
