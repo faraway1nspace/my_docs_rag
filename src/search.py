@@ -3,7 +3,7 @@
 import os
 import logging
 
-from typing import List, Literal, Optional, Union
+from typing import Dict, List, Literal, Optional, Union
 from sklearn.metrics.pairwise import cosine_similarity
 
 from src.config import RunConfig
@@ -128,7 +128,7 @@ class Search:
                 top_k_results.append(candidate_doc)
         return top_k_results
 
-    def _search_sparse(self, query: str, k: int = 3, corpus: Optional[List[str]]=[]) -> List[str]:
+    def _search_sparse(self, query: str, k: int = 3, corpus: Optional[List[str]]=[]) -> Dict[str,str]:
         """Search the corpus using TFIDF and return top k non-similar results."""
         if not corpus:
             logging.info("=== sparse search using attached databases === ")
@@ -141,9 +141,9 @@ class Search:
         docs_sorted = sorted(docs_scored, key = lambda x: x.score, reverse=True)
         # get top k docs and ensure they are not too similar
         top_k_docs = self._filter_topk(docs_sorted, k, self.config.max_similarity)
-        return [doc.text for doc in top_k_docs]
+        return {doc.filename: doc.text for doc in top_k_docs}
 
-    def _search_dense(self, query: str, k: int = 3, corpus: Optional[List[str]]=[]) -> List[str]:
+    def _search_dense(self, query: str, k: int = 3, corpus: Optional[List[str]]=[]) -> Dict[str,str]:
         """Search the corpus using SBERT and return top k non-similar results."""
         if not corpus:
             logging.info("=== dense search using attached databases === ")
@@ -156,9 +156,9 @@ class Search:
         docs_sorted = sorted(docs_scored, key = lambda x: x.score, reverse=True)
         # get top k docs and ensure they are not too similar
         top_k_docs = self._filter_topk(docs_sorted, k, self.config.max_similarity)
-        return [doc.text for doc in top_k_docs]
+        return {doc.filename: doc.text for doc in top_k_docs}
 
-    def _search_combined(self, query: str, k: int = 3, corpus: Optional[List[str]]=[]) -> List[str]:
+    def _search_combined(self, query: str, k: int = 3, corpus: Optional[List[str]]=[]) -> Dict[str,str]:
         """Search the corpus using TFIDF and SBERT and return top k non-similar results."""
         def combine_scores(x:float, y:float, eps:float=0.0001) -> float:
             """Harmonic mean"""
@@ -212,7 +212,7 @@ class Search:
                 top_k_results.append(candidate_filenm) # add candidate to top results to return
 
         # return the documents
-        return [tfidf_corpus_processor[filename].text for filename in top_k_results]
+        return {filename: tfidf_corpus_processor[filename].text for filename in top_k_results}
 
 
     def search(
@@ -221,7 +221,7 @@ class Search:
             k: int = 3, 
             method: Literal['sparse','dense','combined']="combined",
             corpus: Optional[List[str]]=[]
-        ) -> List[str]:
+        ) -> Dict[str,str]:
         """Search the corpus using TFIDF and/or SBERT and return top k diverse non-similar results.
         
         Arguments:
